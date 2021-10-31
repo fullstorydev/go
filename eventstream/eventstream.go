@@ -49,13 +49,13 @@ func (e *eventStream) initNextTail() *node {
 	return newTail
 }
 
-// NewEventStream creates an EventStream with the default buffer size.
-func NewEventStream() EventStream {
-	return NewEventStreamWithBuffer(defaultBufferSize)
+// New creates an EventStream with the default buffer size.
+func New() EventStream {
+	return NewWithBuffer(defaultBufferSize)
 }
 
-// NewEventStreamWithBuffer creates an EventStream with the given buffer size.
-func NewEventStreamWithBuffer(bufferSize int) EventStream {
+// NewWithBuffer creates an EventStream with the given buffer size.
+func NewWithBuffer(bufferSize int) EventStream {
 	if bufferSize < 1 {
 		panic("invalid buffer size")
 	}
