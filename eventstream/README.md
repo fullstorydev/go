@@ -37,9 +37,9 @@ nodes can be collected more frequently.
 Use this wherever you might have used a Go channel, but you need to multiple subscribers to each
 receive all events.
 
-- Publishing a shared stream of events to all connected clients (for an example, see [BWAMP](https://bwamp.me))
-- Synchronizing a shared data model across services using GRPC streams.
+- Publish a shared stream of events to all connected clients (for an example, see [BWAMP](https://bwamp.me))
+- Synchronize a shared data model across services using gRPC streams.
 
 ## Examples
 
-TODO: examples will be forthcoming.
+See [chatterbox](../examples/chatterbox) for a simple chat client implemented using gRPC streams with `EventStream`.
