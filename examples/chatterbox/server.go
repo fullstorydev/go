@@ -12,7 +12,7 @@ import (
 type Server struct {
 	UnimplementedChatterBoxServer
 
-	model  *MembersList
+	model  *ServerMembers
 	lastId int64
 }
 
@@ -47,8 +47,8 @@ func (s *Server) Chat(server ChatterBox_ChatServer) error {
 	return s.sendLoop(server)
 }
 
-func (s *Server) Listen(empty *emptypb.Empty, server ChatterBox_ListenServer) error {
-	// Don't join, just listen.
+func (s *Server) Monitor(_ *emptypb.Empty, server ChatterBox_MonitorServer) error {
+	// Don't join, just monitor.
 	return s.sendLoop(server)
 }
 

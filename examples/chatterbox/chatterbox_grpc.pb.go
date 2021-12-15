@@ -19,8 +19,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ChatterBoxClient interface {
+	// Chat joins the chat room and sends chat messages.
 	Chat(ctx context.Context, opts ...grpc.CallOption) (ChatterBox_ChatClient, error)
-	Listen(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (ChatterBox_ListenClient, error)
+	// Monitor passively monitors the room.
+	Monitor(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (ChatterBox_MonitorClient, error)
 }
 
 type chatterBoxClient struct {
@@ -62,12 +64,12 @@ func (x *chatterBoxChatClient) Recv() (*Event, error) {
 	return m, nil
 }
 
-func (c *chatterBoxClient) Listen(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (ChatterBox_ListenClient, error) {
-	stream, err := c.cc.NewStream(ctx, &ChatterBox_ServiceDesc.Streams[1], "/chatterbox.ChatterBox/Listen", opts...)
+func (c *chatterBoxClient) Monitor(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (ChatterBox_MonitorClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ChatterBox_ServiceDesc.Streams[1], "/chatterbox.ChatterBox/Monitor", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &chatterBoxListenClient{stream}
+	x := &chatterBoxMonitorClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -77,16 +79,16 @@ func (c *chatterBoxClient) Listen(ctx context.Context, in *emptypb.Empty, opts .
 	return x, nil
 }
 
-type ChatterBox_ListenClient interface {
+type ChatterBox_MonitorClient interface {
 	Recv() (*Event, error)
 	grpc.ClientStream
 }
 
-type chatterBoxListenClient struct {
+type chatterBoxMonitorClient struct {
 	grpc.ClientStream
 }
 
-func (x *chatterBoxListenClient) Recv() (*Event, error) {
+func (x *chatterBoxMonitorClient) Recv() (*Event, error) {
 	m := new(Event)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -98,8 +100,10 @@ func (x *chatterBoxListenClient) Recv() (*Event, error) {
 // All implementations must embed UnimplementedChatterBoxServer
 // for forward compatibility
 type ChatterBoxServer interface {
+	// Chat joins the chat room and sends chat messages.
 	Chat(ChatterBox_ChatServer) error
-	Listen(*emptypb.Empty, ChatterBox_ListenServer) error
+	// Monitor passively monitors the room.
+	Monitor(*emptypb.Empty, ChatterBox_MonitorServer) error
 	mustEmbedUnimplementedChatterBoxServer()
 }
 
@@ -110,8 +114,8 @@ type UnimplementedChatterBoxServer struct {
 func (UnimplementedChatterBoxServer) Chat(ChatterBox_ChatServer) error {
 	return status.Errorf(codes.Unimplemented, "method Chat not implemented")
 }
-func (UnimplementedChatterBoxServer) Listen(*emptypb.Empty, ChatterBox_ListenServer) error {
-	return status.Errorf(codes.Unimplemented, "method Listen not implemented")
+func (UnimplementedChatterBoxServer) Monitor(*emptypb.Empty, ChatterBox_MonitorServer) error {
+	return status.Errorf(codes.Unimplemented, "method Monitor not implemented")
 }
 func (UnimplementedChatterBoxServer) mustEmbedUnimplementedChatterBoxServer() {}
 
@@ -152,24 +156,24 @@ func (x *chatterBoxChatServer) Recv() (*Send, error) {
 	return m, nil
 }
 
-func _ChatterBox_Listen_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _ChatterBox_Monitor_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(emptypb.Empty)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ChatterBoxServer).Listen(m, &chatterBoxListenServer{stream})
+	return srv.(ChatterBoxServer).Monitor(m, &chatterBoxMonitorServer{stream})
 }
 
-type ChatterBox_ListenServer interface {
+type ChatterBox_MonitorServer interface {
 	Send(*Event) error
 	grpc.ServerStream
 }
 
-type chatterBoxListenServer struct {
+type chatterBoxMonitorServer struct {
 	grpc.ServerStream
 }
 
-func (x *chatterBoxListenServer) Send(m *Event) error {
+func (x *chatterBoxMonitorServer) Send(m *Event) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -188,8 +192,8 @@ var ChatterBox_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "Listen",
-			Handler:       _ChatterBox_Listen_Handler,
+			StreamName:    "Monitor",
+			Handler:       _ChatterBox_Monitor_Handler,
 			ServerStreams: true,
 		},
 	},

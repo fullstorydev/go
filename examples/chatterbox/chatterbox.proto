@@ -7,8 +7,12 @@ package chatterbox;
 import "google/protobuf/empty.proto";
 
 service ChatterBox {
+  // Chat joins the chat room and sends chat messages.
   rpc Chat(stream Send) returns (stream Event) {}
-  rpc Listen(google.protobuf.Empty) returns (stream Event) {}
+
+
+  // Monitor passively monitors the room.
+  rpc Monitor(google.protobuf.Empty) returns (stream Event) {}
 }
 
 message Send {

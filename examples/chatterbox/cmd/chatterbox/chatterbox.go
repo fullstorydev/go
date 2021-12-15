@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -12,6 +13,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	addr = "127.0.0.1:9000"
+)
+
 func main() {
 	flag.Parse()
 
@@ -21,13 +26,13 @@ func main() {
 	var err error
 	switch flag.Arg(0) {
 	case "":
-		err = fmt.Errorf(`choose one of: "server", "client", "listen" `)
+		err = fmt.Errorf(`choose one of: "server", "client", "monitor" `)
 	case "server":
 		err = runServer(ctx)
 	case "client":
 		err = runClient(ctx)
-	case "listen":
-		err = runListener(ctx)
+	case "monitor":
+		err = runMonitor(ctx)
 	default:
 		err = fmt.Errorf("unknown command: %s", flag.Arg(0))
 	}
@@ -38,36 +43,57 @@ func main() {
 	}
 }
 
-func runServer(ctx context.Context) error {
+func runServer(_ context.Context) error {
 	svr := grpc.NewServer()
 	chatterbox.RegisterChatterBoxServer(svr, chatterbox.NewServer())
 
-	lis, err := net.Listen("tcp", "127.0.0.1:9000")
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	log.Println("Listening on port 9000")
+	log.Println("Listening on ", addr)
 	return svr.Serve(lis)
 }
 
 func runClient(ctx context.Context) error {
-	log.Println("Dialing port 9000")
-	conn, err := grpc.DialContext(ctx, "127.0.0.1:9000", grpc.WithInsecure())
+	log.Println("Dialing ", addr)
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithInsecure())
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
 	defer conn.Close()
 
-	return chatterbox.RunClient(ctx, chatterbox.NewChatterBoxClient(conn))
+	// Read lines off the terminal, try to send through channel.
+	ctx, cancel := context.WithCancel(ctx)
+	chatInput := make(chan string)
+	go func() {
+		// when exiting for any reason, cancel the stream context.
+		defer cancel()
+		defer close(chatInput)
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			select {
+			case <-ctx.Done():
+				return
+			case chatInput <- scanner.Text():
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	return chatterbox.RunClient(ctx, chatInput, chatterbox.NewChatterBoxClient(conn))
 }
 
-func runListener(ctx context.Context) error {
-	log.Println("Dialing port 9000")
-	conn, err := grpc.DialContext(ctx, "127.0.0.1:9000", grpc.WithInsecure())
+func runMonitor(ctx context.Context) error {
+	log.Println("Dialing ", addr)
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithInsecure())
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
 	defer conn.Close()
 
-	return chatterbox.RunListener(ctx, chatterbox.NewChatterBoxClient(conn))
+	return chatterbox.RunMonitor(ctx, chatterbox.NewChatterBoxClient(conn))
 }

@@ -1,49 +1,99 @@
 package chatterbox
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
 )
 
-// RunClient is an example of a gRPC client for a bidi server stream.
-func RunClient(ctx context.Context, cl ChatterBoxClient) error {
+// RunClient is an example of a gRPC client for a one-way server stream.
+func RunClient(ctx context.Context, chatInput <-chan string, cl ChatterBoxClient) error {
+	mc := &MembersClient{
+		cl:        cl,
+		chatInput: chatInput,
+	}
+
+	if err := mc.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start client: %w", err)
+	}
+
+	<-ctx.Done() // block forever for this sample
+	return nil
+}
+
+type MembersClient struct {
+	cl        ChatterBoxClient
+	chatInput <-chan string
+
+	mu      sync.RWMutex
+	members MembersModel
+}
+
+// GetMembers returns the current list of members (at all times) to the rest of the application.
+func (mc *MembersClient) GetMembers() []string {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+	return mc.members.Strings()
+}
+
+// Start this MembersClient. Fetches the initial state synchronously, then background monitors until ctx is cancelled.
+func (mc *MembersClient) Start(ctx context.Context) error {
+	started := false
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// Read lines off the terminal, try to send through channel.
-	msgs := make(chan string)
-	go func() {
-		// when exiting for any reason, cancel the stream context.
-		defer cancel()
-		defer close(msgs)
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			select {
-			case <-ctx.Done():
-				return
-			case msgs <- scanner.Text():
-			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			log.Println(err)
+	defer func() {
+		// Ensure cleanup happens if we do not start successfully.
+		if !started {
+			cancel()
 		}
 	}()
 
+	// Synchronously ensure we can fetch an initial model before we return.
+	stream, err := mc.startStream(ctx)
+	if err != nil {
+		return err // failed to fetch the initial state
+	}
+	started = true
+
+	go func() {
+		// Monitor the first stream until it dies.
+		if err := mc.monitorStream(ctx, stream); err != nil {
+			log.Println(err)
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		// Run until ctx is cancelled.
+		if err := mc.Run(ctx); err != nil {
+			log.Println(err)
+		}
+	}()
+	return nil
+}
+
+// Run runs this MembersClient in the foreground until ctx is cancelled.
+func (mc *MembersClient) Run(ctx context.Context) error {
 	const maxBackoff = 16 * time.Second
 	backoff := time.Second
 
 	// Loop forever until killed or cancelled.
 	for {
-		ok, err := clientIterate(ctx, msgs, cl)
-		if err := filterErr(err); err != nil {
+		ok, err := func() (bool, error) {
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			stream, err := mc.startStream(ctx)
+			if err != nil {
+				return false, err
+			}
+
+			return true, mc.monitorStream(ctx, stream)
+		}()
+		if err != nil {
 			log.Println(err)
 		}
+
 		if ok {
 			backoff = time.Second
 		} else {
@@ -61,38 +111,45 @@ func RunClient(ctx context.Context, cl ChatterBoxClient) error {
 	}
 }
 
-func clientIterate(ctx context.Context, messages <-chan string, cl ChatterBoxClient) (bool, error) {
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	stream, err := cl.Chat(ctx)
+func (mc *MembersClient) startStream(ctx context.Context) (ChatterBox_ChatClient, error) {
+	stream, err := mc.cl.Chat(ctx)
 	if err != nil {
-		return false, fmt.Errorf("cl.Chat: %w", err)
+		return nil, fmt.Errorf("cl.Chat: %w", err)
 	}
 
 	members, err := fetchInitialState(ctx, stream)
 	if err != nil {
-		return false, fmt.Errorf("fetchInitialState: %w", err)
+		return nil, fmt.Errorf("fetchInitialState: %w", err)
 	}
 
-	// Successfully fetched initial state; from here on return true to reset backoff.
+	// Successfully fetched initial state.
 	log.Printf("Members: %+v", members)
+	func() {
+		mc.mu.Lock()
+		defer mc.mu.Unlock()
+		mc.members = members
+	}()
+	return stream, nil
+}
 
-	// Send chat to the server in the background.
+// monitor pulls from the given stream until it closes, updating members model.
+func (mc *MembersClient) monitorStream(ctx context.Context, stream ChatterBox_ChatClient) error {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	// Whenever our stream is up, send any chat inputs to the server.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	wg.Add(1)
 	go func() {
-		// when exiting for any reason, cancel the stream
 		defer wg.Done()
-		defer cancel()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case msg, ok := <-messages:
+			case msg, ok := <-mc.chatInput:
 				if !ok {
 					return
 				}
@@ -106,5 +163,34 @@ func clientIterate(ctx context.Context, messages <-chan string, cl ChatterBoxCli
 		}
 	}()
 
-	return true, monitor(ctx, members, stream)
+	// Monitor the connection.
+	for {
+		msg, err := stream.Recv()
+		if err != nil {
+			return filterErr(err)
+		}
+
+		switch msg.What {
+		case What_CHAT:
+			log.Printf("%s: %s", msg.Who, msg.Text)
+		case What_JOIN:
+			func() {
+				mc.mu.Lock()
+				defer mc.mu.Unlock()
+				mc.members.Add(msg.Who)
+			}()
+			log.Printf("%s: joined", msg.Who)
+			log.Printf("Members: %s", mc.GetMembers())
+		case What_LEAVE:
+			func() {
+				mc.mu.Lock()
+				defer mc.mu.Unlock()
+				mc.members.Remove(msg.Who)
+			}()
+			log.Printf("%s: left", msg.Who)
+			log.Printf("Members: %s", mc.GetMembers())
+		default:
+			return fmt.Errorf("unexpected type: %s", msg.What)
+		}
+	}
 }
