@@ -52,11 +52,6 @@ func (s *Server) Monitor(_ *emptypb.Empty, server ChatterBox_MonitorServer) erro
 	return s.sendLoop(server)
 }
 
-type commonServer interface {
-	grpc.ServerStream
-	Send(*Event) error
-}
-
 func (s *Server) recvLoop(name string, server ChatterBox_ChatServer) error {
 	for {
 		req, err := server.Recv()
@@ -69,7 +64,13 @@ func (s *Server) recvLoop(name string, server ChatterBox_ChatServer) error {
 	}
 }
 
-func (s *Server) sendLoop(server commonServer) error {
+// commonClientStream intersects ChatterBox_ChatServer and ChatterBox_MonitorServer
+type commonServerStream interface {
+	grpc.ServerStream
+	Send(*Event) error
+}
+
+func (s *Server) sendLoop(server commonServerStream) error {
 	members, eventPromise := s.model.ReadAndSubscribe()
 
 	// Send the initial members.

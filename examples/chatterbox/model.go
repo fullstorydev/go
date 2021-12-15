@@ -7,15 +7,19 @@ import (
 
 // MembersModel is a basic model object representing the current users in the room.
 // Used by both client and server.  For this app, we've made a couple of design choices:
+//
 // 1) Copy-on-read instead of copy-on-write.
 // 2) Simple direct mutators (Add/Remove).
-// Contrast with MembersModelAlt.
+//
+// This implementation requires external synchronization. Contrast with MembersModelAlt.
 type MembersModel map[string]struct{}
 
+// Add adds a user to the set.
 func (mm MembersModel) Add(name string) {
 	mm[name] = struct{}{}
 }
 
+// Remove removes user to the set.
 func (mm MembersModel) Remove(name string) {
 	delete(mm, name)
 }
@@ -36,11 +40,14 @@ func (mm MembersModel) String() string {
 
 // MembersModelAlt is alternative model object representing the current users in the room, but
 // with the opposite set of design choices:
+//
 // 1) Copy-on-write instead of copy-on-read.
 // 2) Applies mutation events rather than direct mutators.
-// Contrast with MembersModel.
+//
+// This implementation does not require external synchronization. Contrast with MembersModel.
 type MembersModelAlt []string
 
+// ApplyMutation returns a copy of the current model with the given mutation applied.
 func (mma MembersModelAlt) ApplyMutation(evt *Event) MembersModelAlt {
 	switch evt.What {
 	case What_JOIN:

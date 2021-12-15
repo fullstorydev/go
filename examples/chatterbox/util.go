@@ -21,14 +21,14 @@ func filterErr(err error) error {
 	return err
 }
 
-// commonStream is an intesection type for ChatterBox_ChatClient and ChatterBox_MonitorClient
-type commonStream interface {
-	Recv() (*Event, error)
+// commonClientStream intersects ChatterBox_ChatClient and ChatterBox_MonitorClient
+type commonClientStream interface {
 	grpc.ClientStream
+	Recv() (*Event, error)
 }
 
 // fetchInitialState ensures we read a complete initial model from the server
-func fetchInitialState(ctx context.Context, stream commonStream) (MembersModel, error) {
+func fetchInitialState(ctx context.Context, stream commonClientStream) (MembersModel, error) {
 	// Wait for the initial state to come back.
 	members := MembersModel{}
 	for {
