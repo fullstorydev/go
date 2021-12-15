@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// filterErr cleans up error logging by filtering out errors related to (probably user initiated) cancel.
 func filterErr(err error) error {
 	if err == io.EOF || err == context.Canceled {
 		return nil

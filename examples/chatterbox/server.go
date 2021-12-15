@@ -3,10 +3,8 @@ package chatterbox
 import (
 	"fmt"
 	"log"
-	"sync"
 	"sync/atomic"
 
-	"github.com/fullstorydev/go/eventstream"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -14,17 +12,14 @@ import (
 type Server struct {
 	UnimplementedChatterBoxServer
 
-	model  MembersList
-	nextId int64
+	model  *MembersList
+	lastId int64
 }
 
 func NewServer() *Server {
 	return &Server{
-		model: MembersList{
-			mu:      sync.RWMutex{},
-			members: map[string]struct{}{},
-			es:      eventstream.New(),
-		},
+		model:  NewMembersList(),
+		lastId: 0,
 	}
 }
 
@@ -32,7 +27,7 @@ var _ ChatterBoxServer = (*Server)(nil)
 
 func (s *Server) Chat(server ChatterBox_ChatServer) error {
 	// Make up a name for this connection.
-	id := atomic.AddInt64(&s.nextId, 1)
+	id := atomic.AddInt64(&s.lastId, 1)
 	name := fmt.Sprintf("User %d", id)
 
 	// Join the memberslist.
@@ -41,12 +36,14 @@ func (s *Server) Chat(server ChatterBox_ChatServer) error {
 	defer log.Printf("%s left", name)
 	defer s.model.Leave(name)
 
-	// We do not wait on this loop to exit; it will exit after we return.
+	// We do not wait on the recv loop to exit; it will exit after we return.
 	go func() {
 		if err := s.recvLoop(name, server); err != nil {
 			log.Printf("%s err: %s", name, err)
 		}
 	}()
+
+	// Run the send loop in the foreground.
 	return s.sendLoop(server)
 }
 

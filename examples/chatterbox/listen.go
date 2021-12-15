@@ -55,26 +55,5 @@ func listenIterate(ctx context.Context, cl ChatterBoxClient) (bool, error) {
 	// Successfully fetched initial state; from here on return true to reset backoff.
 	log.Printf("Members: %+v", members)
 
-	// Monitor the connection.
-	for {
-		msg, err := stream.Recv()
-		if err != nil {
-			return true, err
-		}
-
-		switch msg.What {
-		case What_CHAT:
-			log.Printf("%s: %s", msg.Who, msg.Text)
-		case What_JOIN:
-			members[msg.Who] = struct{}{}
-			log.Printf("%s: joined", msg.Who)
-			log.Printf("Members: %+v", members)
-		case What_LEAVE:
-			delete(members, msg.Who)
-			log.Printf("%s: left", msg.Who)
-			log.Printf("Members: %+v", members)
-		default:
-			return true, fmt.Errorf("unexpected type: %s", msg.What)
-		}
-	}
+	return true, monitor(ctx, members, stream)
 }

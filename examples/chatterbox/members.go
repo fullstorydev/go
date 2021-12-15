@@ -2,20 +2,44 @@ package chatterbox
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/fullstorydev/go/eventstream"
 )
 
-type member struct {
-	name string
-	id   int64
+// MembersModel is a basic model object representing the current users in the room.
+type MembersModel map[string]struct{}
+
+func (m MembersModel) Add(name string) {
+	m[name] = struct{}{}
 }
 
+func (m MembersModel) Remove(name string) {
+	delete(m, name)
+}
+
+func (m MembersModel) String() string {
+	var ret []string
+	for k := range m {
+		ret = append(ret, k)
+	}
+	sort.Strings(ret)
+	return strings.Join(ret, ", ")
+}
+
+// MembersList is a synchronized mutable model tracking changes to MembersModel over time.
 type MembersList struct {
 	mu      sync.RWMutex
-	members map[string]struct{}
+	members MembersModel
 	es      eventstream.EventStream
+}
+
+func NewMembersList() *MembersList {
+	return &MembersList{
+		members: MembersModel{},
+		es:      eventstream.New(),
+	}
 }
 
 func (m *MembersList) ReadAndSubscribe() ([]string, eventstream.Promise) {
@@ -32,7 +56,9 @@ func (m *MembersList) ReadAndSubscribe() ([]string, eventstream.Promise) {
 func (m *MembersList) Join(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.members[name] = struct{}{}
+
+	// apply update, publish event
+	m.members.Add(name)
 	m.es.Publish(&Event{
 		Who:  name,
 		What: What_JOIN,
@@ -43,7 +69,8 @@ func (m *MembersList) Leave(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.members, name)
+	// apply update, publish event
+	m.members.Remove(name)
 	m.es.Publish(&Event{
 		Who:  name,
 		What: What_LEAVE,
