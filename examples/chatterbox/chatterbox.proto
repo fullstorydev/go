@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option go_package = "github.com/fullstorydev/go/examples/chatterbox";
+
+package chatterbox;
+
+import "google/protobuf/empty.proto";
+
+service ChatterBox {
+  rpc Chat(stream Send) returns (stream Event) {}
+  rpc Listen(google.protobuf.Empty) returns (stream Event) {}
+}
+
+message Send {
+  string text = 1;
+}
+
+message Event {
+  string who = 1;
+  What what = 2;
+  string text = 3;
+}
+
+enum What {
+  INITIALIZED = 0; // signals that the client is fully initialized
+  CHAT = 1;
+  JOIN = 2;
+  LEAVE = 3;
+}
