@@ -7,7 +7,7 @@ A simple chat server that illustrates using [EventStream](https://github.com/ful
 ### Remote
 
 ```bash
-go install github.com/fullstorydev/go/examples/chatterbox/cmd/chatterbox@master
+go install github.com/fullstorydev/go/examples/chatterbox/...@latest
 ```
 
 ### Local
