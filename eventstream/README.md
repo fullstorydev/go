@@ -42,4 +42,64 @@ receive all events.
 
 ## Examples
 
-See [chatterbox](../examples/chatterbox) for a simple chat client implemented using gRPC streams with `EventStream`.
+### Basic
+
+```go
+package main
+
+import (
+	"log"
+	"sync"
+	"time"
+
+	"github.com/fullstorydev/go/eventstream"
+)
+
+func main() {
+	stream := eventstream.New()
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	for i := 0; i < 3; i++ {
+		i := i
+		promise := stream.Subscribe()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				var v interface{}
+				v, promise = promise.Next()
+				if v == nil {
+					return
+				}
+				log.Printf("%d: %s", i, v.(string))
+			}
+		}()
+	}
+
+	stream.Publish("Hello!")
+	time.Sleep(time.Second)
+	stream.Publish("I am")
+	time.Sleep(time.Second)
+	stream.Publish("EventStream")
+	time.Sleep(time.Second)
+	stream.Close()
+}
+```
+
+Running this will produce something like:
+```
+2021/12/16 13:41:14 0: Hello!
+2021/12/16 13:41:14 1: Hello!
+2021/12/16 13:41:14 2: Hello!
+2021/12/16 13:41:15 0: I am
+2021/12/16 13:41:15 1: I am
+2021/12/16 13:41:15 2: I am
+2021/12/16 13:41:16 0: EventStream
+2021/12/16 13:41:16 2: EventStream
+2021/12/16 13:41:16 1: EventStream
+```
+
+### chatterbox
+
+See [chatterbox](../examples/chatterbox) for a full example chat client implemented using gRPC streams with `EventStream`.

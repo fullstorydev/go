@@ -7,7 +7,7 @@ import (
 	"github.com/fullstorydev/go/eventstream"
 )
 
-// ServerMembers is a server-side synchronized mutable model tracking changes to MembersModel over time.
+// ServerMembers is a server-side Log Replicated Model tracking changes to MembersModel over time.
 type ServerMembers struct {
 	mu      sync.RWMutex
 	members MembersModel
