@@ -1,16 +1,17 @@
-package chatterbox
+package chatserver
 
 import (
 	"fmt"
 	"log"
 	"sync/atomic"
 
+	"github.com/fullstorydev/go/examples/chatterbox"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type Server struct {
-	UnimplementedChatterBoxServer
+	chatterbox.UnimplementedChatterBoxServer
 
 	model  *ServerMembers
 	lastId int64
@@ -23,9 +24,9 @@ func NewServer() *Server {
 	}
 }
 
-var _ ChatterBoxServer = (*Server)(nil)
+var _ chatterbox.ChatterBoxServer = (*Server)(nil)
 
-func (s *Server) Chat(server ChatterBox_ChatServer) error {
+func (s *Server) Chat(server chatterbox.ChatterBox_ChatServer) error {
 	// Make up a name for this connection.
 	id := atomic.AddInt64(&s.lastId, 1)
 	name := fmt.Sprintf("User %d", id)
@@ -47,16 +48,16 @@ func (s *Server) Chat(server ChatterBox_ChatServer) error {
 	return s.sendLoop(server)
 }
 
-func (s *Server) Monitor(_ *emptypb.Empty, server ChatterBox_MonitorServer) error {
+func (s *Server) Monitor(_ *emptypb.Empty, server chatterbox.ChatterBox_MonitorServer) error {
 	// Don't join, just monitor.
 	return s.sendLoop(server)
 }
 
-func (s *Server) recvLoop(name string, server ChatterBox_ChatServer) error {
+func (s *Server) recvLoop(name string, server chatterbox.ChatterBox_ChatServer) error {
 	for {
 		req, err := server.Recv()
 		if err != nil {
-			return filterErr(err)
+			return filterServerError(err)
 		}
 
 		s.model.Chat(name, req.Text)
@@ -64,10 +65,10 @@ func (s *Server) recvLoop(name string, server ChatterBox_ChatServer) error {
 	}
 }
 
-// commonClientStream intersects ChatterBox_ChatServer and ChatterBox_MonitorServer
+// commonServerStream intersects ChatterBox_ChatServer and ChatterBox_MonitorServer
 type commonServerStream interface {
 	grpc.ServerStream
-	Send(*Event) error
+	Send(*chatterbox.Event) error
 }
 
 func (s *Server) sendLoop(server commonServerStream) error {
@@ -75,19 +76,19 @@ func (s *Server) sendLoop(server commonServerStream) error {
 
 	// Send the initial members.
 	for _, m := range members {
-		if err := server.Send(&Event{
+		if err := server.Send(&chatterbox.Event{
 			Who:  m,
-			What: What_JOIN,
+			What: chatterbox.What_JOIN,
 		}); err != nil {
-			return filterErr(err)
+			return filterServerError(err)
 		}
 	}
 
 	// Signal ready.
-	if err := server.Send(&Event{
-		What: What_INITIALIZED,
+	if err := server.Send(&chatterbox.Event{
+		What: chatterbox.What_INITIALIZED,
 	}); err != nil {
-		return filterErr(err)
+		return filterServerError(err)
 	}
 
 	for {
@@ -102,8 +103,8 @@ func (s *Server) sendLoop(server commonServerStream) error {
 			}
 			eventPromise = nextPromise
 
-			if err := server.Send(evt.(*Event)); err != nil {
-				return filterErr(err)
+			if err := server.Send(evt.(*chatterbox.Event)); err != nil {
+				return filterServerError(err)
 			}
 		}
 	}

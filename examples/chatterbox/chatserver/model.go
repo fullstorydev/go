@@ -1,22 +1,23 @@
-package chatterbox
+package chatserver
 
 import (
 	"sort"
 	"sync"
 
 	"github.com/fullstorydev/go/eventstream"
+	"github.com/fullstorydev/go/examples/chatterbox"
 )
 
 // ServerMembers is a server-side Log Replicated Model tracking changes to MembersModel over time.
 type ServerMembers struct {
 	mu      sync.RWMutex
-	members MembersModel
+	members chatterbox.MembersModel
 	es      eventstream.EventStream
 }
 
 func NewMembersList() *ServerMembers {
 	return &ServerMembers{
-		members: MembersModel{},
+		members: chatterbox.MembersModel{},
 		es:      eventstream.New(),
 	}
 }
@@ -38,9 +39,9 @@ func (m *ServerMembers) Join(name string) {
 
 	// apply update, publish event
 	m.members.Add(name)
-	m.es.Publish(&Event{
+	m.es.Publish(&chatterbox.Event{
 		Who:  name,
-		What: What_JOIN,
+		What: chatterbox.What_JOIN,
 	})
 }
 
@@ -50,16 +51,16 @@ func (m *ServerMembers) Leave(name string) {
 
 	// apply update, publish event
 	m.members.Remove(name)
-	m.es.Publish(&Event{
+	m.es.Publish(&chatterbox.Event{
 		Who:  name,
-		What: What_LEAVE,
+		What: chatterbox.What_LEAVE,
 	})
 }
 
 func (m *ServerMembers) Chat(name string, text string) {
-	m.es.Publish(&Event{
+	m.es.Publish(&chatterbox.Event{
 		Who:  name,
-		What: What_CHAT,
+		What: chatterbox.What_CHAT,
 		Text: text,
 	})
 }

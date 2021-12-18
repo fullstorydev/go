@@ -1,4 +1,4 @@
-package chatterbox
+package chatclient
 
 import (
 	"context"
@@ -6,10 +6,12 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/fullstorydev/go/examples/chatterbox"
 )
 
-// RunClient is an example of a gRPC client for a one-way server stream.
-func RunClient(ctx context.Context, chatInput <-chan string, cl ChatterBoxClient) error {
+// RunClient is an example of a gRPC client for a two-way bidi stream.
+func RunClient(ctx context.Context, chatInput <-chan string, cl chatterbox.ChatterBoxClient) error {
 	mc := &MembersClient{
 		cl:        cl,
 		chatInput: chatInput,
@@ -24,18 +26,11 @@ func RunClient(ctx context.Context, chatInput <-chan string, cl ChatterBoxClient
 }
 
 type MembersClient struct {
-	cl        ChatterBoxClient
+	cl        chatterbox.ChatterBoxClient
 	chatInput <-chan string
 
 	mu      sync.RWMutex
-	members MembersModel
-}
-
-// GetMembers returns the current list of members (at all times) to the rest of the application.
-func (mc *MembersClient) GetMembers() []string {
-	mc.mu.RLock()
-	defer mc.mu.RUnlock()
-	return mc.members.Strings()
+	members chatterbox.MembersModel
 }
 
 // Start this MembersClient. Fetches the initial state synchronously, then background monitors until ctx is cancelled.
@@ -111,7 +106,7 @@ func (mc *MembersClient) Run(ctx context.Context) error {
 	}
 }
 
-func (mc *MembersClient) startStream(ctx context.Context) (ChatterBox_ChatClient, error) {
+func (mc *MembersClient) startStream(ctx context.Context) (chatterbox.ChatterBox_ChatClient, error) {
 	stream, err := mc.cl.Chat(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cl.Chat: %w", err)
@@ -133,7 +128,7 @@ func (mc *MembersClient) startStream(ctx context.Context) (ChatterBox_ChatClient
 }
 
 // monitor pulls from the given stream until it closes, updating members model.
-func (mc *MembersClient) monitorStream(ctx context.Context, stream ChatterBox_ChatClient) error {
+func (mc *MembersClient) monitorStream(ctx context.Context, stream chatterbox.ChatterBox_ChatClient) error {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
@@ -153,7 +148,7 @@ func (mc *MembersClient) monitorStream(ctx context.Context, stream ChatterBox_Ch
 				if !ok {
 					return
 				}
-				if err := stream.Send(&Send{
+				if err := stream.Send(&chatterbox.Send{
 					Text: msg,
 				}); err != nil {
 					log.Printf("Failed to send: %s", err)
@@ -167,28 +162,26 @@ func (mc *MembersClient) monitorStream(ctx context.Context, stream ChatterBox_Ch
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
-			return filterErr(err)
+			return filterClientError(err)
 		}
 
 		switch msg.What {
-		case What_CHAT:
+		case chatterbox.What_CHAT:
 			log.Printf("%s: %s", msg.Who, msg.Text)
-		case What_JOIN:
+		case chatterbox.What_JOIN:
 			func() {
 				mc.mu.Lock()
 				defer mc.mu.Unlock()
 				mc.members.Add(msg.Who)
 			}()
 			log.Printf("%s: joined", msg.Who)
-			log.Printf("Members: %s", mc.GetMembers())
-		case What_LEAVE:
+		case chatterbox.What_LEAVE:
 			func() {
 				mc.mu.Lock()
 				defer mc.mu.Unlock()
 				mc.members.Remove(msg.Who)
 			}()
 			log.Printf("%s: left", msg.Who)
-			log.Printf("Members: %s", mc.GetMembers())
 		default:
 			return fmt.Errorf("unexpected type: %s", msg.What)
 		}

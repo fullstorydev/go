@@ -10,6 +10,8 @@ import (
 	"os"
 
 	"github.com/fullstorydev/go/examples/chatterbox"
+	"github.com/fullstorydev/go/examples/chatterbox/chatclient"
+	"github.com/fullstorydev/go/examples/chatterbox/chatserver"
 	"google.golang.org/grpc"
 )
 
@@ -45,7 +47,7 @@ func main() {
 
 func runServer(_ context.Context) error {
 	svr := grpc.NewServer()
-	chatterbox.RegisterChatterBoxServer(svr, chatterbox.NewServer())
+	chatterbox.RegisterChatterBoxServer(svr, chatserver.NewServer())
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -84,7 +86,7 @@ func runClient(ctx context.Context) error {
 		}
 	}()
 
-	return chatterbox.RunClient(ctx, chatInput, chatterbox.NewChatterBoxClient(conn))
+	return chatclient.RunClient(ctx, chatInput, chatterbox.NewChatterBoxClient(conn))
 }
 
 func runMonitor(ctx context.Context) error {
@@ -95,5 +97,5 @@ func runMonitor(ctx context.Context) error {
 	}
 	defer conn.Close()
 
-	return chatterbox.RunMonitor(ctx, chatterbox.NewChatterBoxClient(conn))
+	return chatclient.RunMonitor(ctx, chatterbox.NewChatterBoxClient(conn))
 }
