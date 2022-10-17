@@ -1,4 +1,4 @@
-module github.com/fullstorydev/go/eventstream/test
+module github.com/fullstorydev/go/eventstream/v2/test
 
 go 1.18
 
