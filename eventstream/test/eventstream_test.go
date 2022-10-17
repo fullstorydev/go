@@ -32,17 +32,17 @@ func TestEventStream_Serial(t *testing.T) {
 		assert.NilError(t, err, "should not err")
 		assert.Equal(t, i, v.(int), "wrong")
 	}
-	assertDone(t, ctx, it1)
+	assertDone(ctx, t, it1)
 
 	for i := 50; i < 100; i++ {
 		v, err := it2.Next(ctx)
 		assert.NilError(t, err, "should not err")
 		assert.Equal(t, i, v.(int), "wrong")
 	}
-	assertDone(t, ctx, it2)
+	assertDone(ctx, t, it2)
 
-	assertDone(t, ctx, it3)
-	assertDone(t, ctx, it4)
+	assertDone(ctx, t, it3)
+	assertDone(ctx, t, it4)
 }
 
 func TestEventStream_Concurrent(t *testing.T) {
@@ -59,7 +59,7 @@ func TestEventStream_Concurrent(t *testing.T) {
 			assert.NilError(t, err)
 			assert.Equal(t, i, v.(int))
 		}
-		assertDone(t, ctx, itEverything)
+		assertDone(ctx, t, itEverything)
 		return nil
 	})
 
@@ -72,7 +72,7 @@ func TestEventStream_Concurrent(t *testing.T) {
 					assert.NilError(t, err)
 					assert.Equal(t, i, v.(int))
 				}
-				assertDone(t, ctx, itHalf)
+				assertDone(ctx, t, itHalf)
 				return nil
 			})
 		}
@@ -80,20 +80,20 @@ func TestEventStream_Concurrent(t *testing.T) {
 	}
 	itNone := es.Subscribe().Iterator() // sees nothing
 	g.Go(func() error {
-		assertDone(t, ctx, itNone)
+		assertDone(ctx, t, itNone)
 		return nil
 	})
 	es.Close()
 	itClosed := es.Subscribe().Iterator() // subscribe after close sees nothing
 	g.Go(func() error {
-		assertDone(t, ctx, itClosed)
+		assertDone(ctx, t, itClosed)
 		return nil
 	})
 
 	assert.NilError(t, g.Wait())
 }
 
-func assertDone(t *testing.T, ctx context.Context, p eventstream.Iterator) {
+func assertDone(ctx context.Context, t *testing.T, p eventstream.Iterator) {
 	t.Helper()
 	v, err := p.Next(ctx)
 	assert.Assert(t, v == nil)
