@@ -2,9 +2,10 @@ package test
 
 import (
 	"context"
-	"github.com/fullstorydev/go/eventstream"
+	"io"
 	"testing"
 
+	"github.com/fullstorydev/go/eventstream"
 	"golang.org/x/sync/errgroup"
 	"gotest.tools/v3/assert"
 )
@@ -98,4 +99,55 @@ func assertDone(ctx context.Context, t *testing.T, p eventstream.Iterator[int]) 
 	v, err := p.Next(ctx)
 	assert.Assert(t, v == 0)
 	assert.Equal(t, eventstream.ErrDone, err)
+}
+
+func TestEventStream_IteratorConsume(t *testing.T) {
+	es := eventstream.New[int]()
+	prom := es.Subscribe()
+	es.Publish(1)
+	es.Publish(2)
+	es.Publish(3)
+	es.Close()
+
+	var collect []int
+	goodCollector := func(ctx context.Context, v int) error {
+		collect = append(collect, v)
+		return nil
+	}
+
+	errCollector := func(err error) func(ctx context.Context, v int) error {
+		return func(ctx context.Context, v int) error {
+			return err
+		}
+	}
+
+	for _, tc := range []struct {
+		name      string
+		collector func(ctx context.Context, v int) error
+		expect    []int
+		expectErr error
+	}{
+		{"good", goodCollector, []int{1, 2, 3}, nil},
+		{"abort", errCollector(eventstream.ErrDone), nil, nil},
+		{"error", errCollector(io.EOF), nil, io.EOF},
+		{"cancel", goodCollector, nil, context.Canceled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			if tc.name == "cancel" {
+				cancel()
+			}
+
+			collect = nil
+			err := prom.Iterator().Consume(ctx, tc.collector)
+			if tc.expectErr == nil {
+				assert.NilError(t, err)
+			} else {
+				assert.ErrorType(t, err, tc.expectErr)
+			}
+			assert.DeepEqual(t, tc.expect, collect)
+		})
+	}
 }
