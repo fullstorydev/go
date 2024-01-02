@@ -2,6 +2,7 @@ package eventstream
 
 import (
 	"context"
+	"errors"
 )
 
 type iterator[T any] struct {
@@ -32,14 +33,17 @@ func (it *iterator[T]) Next(ctx context.Context) (T, error) {
 
 func (it *iterator[T]) Consume(ctx context.Context, callback func(context.Context, T) error) error {
 	for {
-		val, err := it.Next(ctx)
-		if err == ErrDone {
-			return nil
-		} else if err != nil {
-			return err
-		}
-		if err := callback(ctx, val); err != nil {
-			return err
+		if val, err := it.Next(ctx); err != nil {
+			return filterErrDone(err)
+		} else if err = callback(ctx, val); err != nil {
+			return filterErrDone(err)
 		}
 	}
+}
+
+func filterErrDone(err error) error {
+	if errors.Is(err, ErrDone) {
+		return nil
+	}
+	return err
 }

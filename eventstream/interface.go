@@ -55,9 +55,9 @@ type Iterator[T any] interface {
 	Next(ctx context.Context) (T, error)
 
 	// Consume iterates the remainder of the stream, calling the provided callback with each successive value.
-	// - Returns (nil) when the stream is exhausted.
-	// - Returns (ctx.Err()) if the context is cancelled.
-	// - Returns (<error>) if the callback returns any non-nil error.
+	// - Returns `nil` when the stream is exhausted, or if the callback returns ErrDone.
+	// - Returns `<error>` if the callback returns any other non-nil error.
+	// - Returns `ctx.Err()` if the context is cancelled.
 	// Blocks until one of these three outcomes occurs.
 	Consume(ctx context.Context, callback func(context.Context, T) error) error
 }
