@@ -4,16 +4,17 @@ import (
 	"context"
 )
 
-type iterator struct {
-	p Promise
+type iterator[T any] struct {
+	p Promise[T]
 }
 
-func (it *iterator) Next(ctx context.Context) (interface{}, error) {
+func (it *iterator[T]) Next(ctx context.Context) (T, error) {
+	var zero T
 	if it.p == nil {
-		return nil, ErrDone
+		return zero, ErrDone
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return zero, err
 	}
 
 	select {
@@ -21,10 +22,10 @@ func (it *iterator) Next(ctx context.Context) (interface{}, error) {
 		v, p := it.p.Next()
 		it.p = p
 		if p == nil {
-			return nil, ErrDone
+			return zero, ErrDone
 		}
 		return v, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return zero, ctx.Err()
 	}
 }

@@ -1,16 +1,16 @@
 package eventstream
 
-type node struct {
-	value interface{}   // the value of the event (nil until ready)
-	next  *node         // the next node in the stream (nil until ready)
+type node[T any] struct {
+	value T             // the value of the event (zero until ready)
+	next  *node[T]      // the next node in the stream (nil until ready)
 	ready chan struct{} // a channel whose closure marks readiness
 }
 
-func (n *node) Ready() <-chan struct{} {
+func (n *node[T]) Ready() <-chan struct{} {
 	return n.ready
 }
 
-func (n *node) Next() (interface{}, Promise) {
+func (n *node[T]) Next() (T, Promise[T]) {
 	<-n.ready
 	if n.next == nil {
 		// force nil interface
@@ -19,14 +19,14 @@ func (n *node) Next() (interface{}, Promise) {
 	return n.value, n.next
 }
 
-func (n *node) Iterator() Iterator {
-	return &iterator{p: n}
+func (n *node[T]) Iterator() Iterator[T] {
+	return &iterator[T]{p: n}
 }
 
-func (n *node) makeReady(v interface{}, next *node) {
+func (n *node[T]) makeReady(v T, next *node[T]) {
 	n.value = v
 	n.next = next
 	close(n.ready)
 }
 
-var _ Promise = (*node)(nil)
+var _ Promise[any] = (*node[any])(nil)
