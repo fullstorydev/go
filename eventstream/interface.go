@@ -54,7 +54,7 @@ type Iterator[T any] interface {
 	// Blocks until one of these three outcomes occurs.
 	Next(ctx context.Context) (T, error)
 
-	// Consume iterates the remained of the stream, calling the provided callback with each successive value.
+	// Consume iterates the remainder of the stream, calling the provided callback with each successive value.
 	// - Returns (nil) when the stream is exhausted.
 	// - Returns (ctx.Err()) if the context is cancelled.
 	// - Returns (<error>) if the callback returns any non-nil error.
