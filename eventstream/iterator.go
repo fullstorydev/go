@@ -29,3 +29,17 @@ func (it *iterator[T]) Next(ctx context.Context) (T, error) {
 		return zero, ctx.Err()
 	}
 }
+
+func (it *iterator[T]) Consume(ctx context.Context, callback func(context.Context, T) error) error {
+	for {
+		val, err := it.Next(ctx)
+		if err == ErrDone {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if err := callback(ctx, val); err != nil {
+			return err
+		}
+	}
+}
