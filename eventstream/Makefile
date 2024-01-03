@@ -4,10 +4,12 @@ ci: deps checkgofmt vet staticcheck ineffassign predeclared golint errcheck test
 .PHONY: deps
 deps:
 	go get -d -v -t ./...
+	go mod tidy
 
 .PHONY: updatedeps
 updatedeps:
 	go get -d -v -t -u -f ./...
+	go mod tidy
 
 .PHONY: checkgofmt
 checkgofmt:
@@ -18,11 +20,11 @@ checkgofmt:
 
 .PHONY: vet
 vet:
-	go vet -composites=false ./...
+	go vet
 
 .PHONY: staticcheck
 staticcheck:
-	@go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
+	@go install honnef.co/go/tools/cmd/staticcheck@v0.4.3
 	staticcheck ./...
 
 .PHONY: ineffassign
@@ -47,4 +49,5 @@ errcheck:
 
 .PHONY: test
 test:
-	$(MAKE) -C test
+	# The race detector requires CGO: https://github.com/golang/go/issues/6508
+	CGO_ENABLED=1 go test -race ./...

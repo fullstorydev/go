@@ -6,17 +6,17 @@ import (
 
 const defaultBufferSize = 1024
 
-type eventStream struct {
-	tail          *node        // the current tail, as used only by the publisher
+type eventStream[T any] struct {
+	tail          *node[T]     // the current tail, as used only by the publisher
 	subscribeTail atomic.Value // the current tail, as published to subscribers
 
-	buffer    []node // a buffer of nodes to use
-	bufferPos int    // the next available node within buffer
+	buffer    []node[T] // a buffer of nodes to use
+	bufferPos int       // the next available node within buffer
 }
 
-var _ EventStream = (*eventStream)(nil)
+var _ EventStream[any] = (*eventStream[any])(nil)
 
-func (e *eventStream) Publish(v interface{}) {
+func (e *eventStream[T]) Publish(v T) {
 	if e.buffer == nil {
 		panic("closed")
 	}
@@ -25,19 +25,20 @@ func (e *eventStream) Publish(v interface{}) {
 	pub.makeReady(v, nextTail)
 }
 
-func (e *eventStream) Close() {
+func (e *eventStream[T]) Close() {
+	var zero T
 	e.buffer = nil
 	e.bufferPos = 0
-	e.tail.makeReady(nil, nil)
+	e.tail.makeReady(zero, nil)
 }
 
-func (e *eventStream) Subscribe() Promise {
-	return e.subscribeTail.Load().(*node)
+func (e *eventStream[T]) Subscribe() Promise[T] {
+	return e.subscribeTail.Load().(*node[T])
 }
 
-func (e *eventStream) initNextTail() *node {
+func (e *eventStream[T]) initNextTail() *node[T] {
 	if e.bufferPos >= len(e.buffer) {
-		e.buffer = make([]node, len(e.buffer))
+		e.buffer = make([]node[T], len(e.buffer))
 		e.bufferPos = 0
 	}
 
@@ -50,17 +51,17 @@ func (e *eventStream) initNextTail() *node {
 }
 
 // New creates an EventStream with the default buffer size.
-func New() EventStream {
-	return NewWithBuffer(defaultBufferSize)
+func New[T any]() EventStream[T] {
+	return NewWithBuffer[T](defaultBufferSize)
 }
 
 // NewWithBuffer creates an EventStream with the given buffer size.
-func NewWithBuffer(bufferSize int) EventStream {
+func NewWithBuffer[T any](bufferSize int) EventStream[T] {
 	if bufferSize < 1 {
 		panic("invalid buffer size")
 	}
-	ret := &eventStream{
-		buffer:    make([]node, bufferSize),
+	ret := &eventStream[T]{
+		buffer:    make([]node[T], bufferSize),
 		bufferPos: 0,
 	}
 	ret.initNextTail()
