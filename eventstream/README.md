@@ -48,6 +48,8 @@ receive all events.
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -56,21 +58,24 @@ import (
 )
 
 func main() {
-	stream := eventstream.New()
+	ctx := context.Background()
+	stream := eventstream.New[string]()
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	for i := 0; i < 3; i++ {
 		i := i
-		promise := stream.Subscribe()
+		it := stream.Subscribe().Iterator()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for {
 				var v interface{}
-				v, promise = promise.Next()
-				if v == nil {
+				v, err = it.Next(ctx)
+				if errors.Is(err, eventstream.ErrDone) {
 					return
+				} else if err != nil {
+					panic(err)
 				}
 				log.Printf("%d: %s", i, v.(string))
 			}
