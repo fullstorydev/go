@@ -7,6 +7,7 @@ import (
 )
 
 // Group is a variant of golang.org/x/sync/errgroup.Group that automatically catches panics.
+// Provided for drop-in backwards compatibility. New code should use [New] [ContextGroup] instead.
 type Group interface {
 	// Go calls the given function in a new goroutine, passing the group context.
 	//
@@ -32,7 +33,6 @@ type Group interface {
 }
 
 type group struct {
-	ctx    context.Context
 	cancel func(error)
 
 	wg sync.WaitGroup
@@ -57,7 +57,7 @@ func (g *group) done() {
 // All funcs passed into [Group.Go] are wrapped with panic handlers.
 func WithContext(ctx context.Context) (Group, context.Context) {
 	ctx, cancel := context.WithCancelCause(ctx)
-	return &group{ctx: ctx, cancel: cancel}, ctx
+	return &group{cancel: cancel}, ctx
 }
 
 // Wait blocks until all function calls from the Go method have returned, then returns the first non-nil error (if any) from them.
@@ -71,16 +71,8 @@ func (g *group) Wait() error {
 func (g *group) Go(f func() error) {
 	if g.sem != nil {
 		select {
-		case <-g.ctx.Done():
-			g.error(g.ctx.Err())
-			return
 		case g.sem <- struct{}{}:
 		}
-	}
-
-	if err := g.ctx.Err(); err != nil {
-		g.error(err)
-		return
 	}
 
 	g.wg.Add(1)
@@ -98,17 +90,9 @@ func (g *group) TryGo(f func() error) bool {
 		select {
 		case g.sem <- struct{}{}:
 			// Note: this allows barging iff channels in general allow barging.
-		case <-g.ctx.Done():
-			g.error(g.ctx.Err())
-			return true
 		default:
 			return false
 		}
-	}
-
-	if err := g.ctx.Err(); err != nil {
-		g.error(err)
-		return true
 	}
 
 	g.wg.Add(1)
@@ -144,7 +128,7 @@ func recoverWrapper(f func() error) func() error {
 	return func() (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				err = PanicError{Recovered: r}
+				err = NewPanicError(r)
 			}
 		}()
 		return f()

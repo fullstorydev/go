@@ -272,6 +272,9 @@ func TestGoExitsEarly(t *testing.T) {
 	defer cancel()
 
 	fn := func() error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		counter.Add(1)
 		<-ctx.Done() // wait until cancelled
 		return nil

@@ -2,16 +2,23 @@ package errgroup
 
 import (
 	"context"
-	"fmt"
 	"sync"
 )
 
-// SafeGroup is a variant of golang.org/x/sync/errgroup.Group that automatically catches panics and forces the correct context.
-type SafeGroup interface {
+// ContextGroup is a variant of [golang.org/x/sync/errgroup.Group] that:
+// - automatically catches panics
+// - forces the correct context
+// - manages the context lifetime
+// - early-exits any calls to Go or TryGo once the context is canceled
+// NB: unlike the golang version, ContextGroup cannot be reused after Wait() has
+// been called, because the context is dead and no new go funcs will be run.
+type ContextGroup interface {
 	// Go calls the given function in a new goroutine, passing the group context.
 	//
 	// The first call to return a non-nil error cancels the group's context.
 	// The error will be returned by Wait.
+	//
+	// Go returns immediately if the group context is already cancelled.
 	Go(func(context.Context) error)
 	// Wait blocks until all function calls from the Go method have returned, then
 	// returns the first non-nil error (if any) from them.
@@ -20,18 +27,11 @@ type SafeGroup interface {
 	// active goroutines in the group is currently below the configured limit.
 	//
 	// The return value reports whether the goroutine was started.
+	// TryGo returns true immediately if the group context is already cancelled.
 	TryGo(func(context.Context) error) bool
-	// SetLimit limits the number of active goroutines in this group to at most n.
-	// A negative value indicates no limit.
-	//
-	// Any subsequent call to the Go method will block until it can add an active
-	// goroutine without exceeding the configured limit.
-	//
-	// The limit must not be modified while any goroutines in the group are active.
-	SetLimit(n int)
 }
 
-type safeGroup struct {
+type ctxGroup struct {
 	ctx    context.Context
 	cancel func(error)
 
@@ -43,33 +43,45 @@ type safeGroup struct {
 	err     error
 }
 
-var _ SafeGroup = (*safeGroup)(nil)
+var _ ContextGroup = (*ctxGroup)(nil)
 
-func (g *safeGroup) done() {
+func (g *ctxGroup) done() {
 	if g.sem != nil {
 		<-g.sem
 	}
 	g.wg.Done()
 }
 
-// New returns a new SafeGroup derived from ctx.
+// New returns a new ContextGroup derived from ctx.
 //
-// All funcs passed into [SafeGroup.Go] are wrapped with panic handlers and receive the
+// All funcs passed into [ContextGroup.Go] are wrapped with panic handlers and receive the
 // group context automatically.
-func New(ctx context.Context) SafeGroup {
+func New(ctx context.Context) ContextGroup {
 	ctx, cancel := context.WithCancelCause(ctx)
-	return &safeGroup{ctx: ctx, cancel: cancel}
+	return &ctxGroup{ctx: ctx, cancel: cancel}
+}
+
+// NewWithLimit returns a new ContextGroup derived from ctx.
+//
+// Any subsequent call to the Go method will block until it can add an active
+// goroutine without exceeding the configured limit.
+func NewWithLimit(ctx context.Context, limit int) ContextGroup {
+	if limit < 0 {
+		panic("negative limit")
+	}
+	ctx, cancel := context.WithCancelCause(ctx)
+	return &ctxGroup{ctx: ctx, cancel: cancel, sem: make(chan struct{}, limit)}
 }
 
 // Wait blocks until all function calls from the Go method have returned, then returns the first non-nil error (if any) from them.
-func (g *safeGroup) Wait() error {
+func (g *ctxGroup) Wait() error {
 	g.wg.Wait()
 	g.cancel(g.err)
 	return g.err
 }
 
 // Go calls the given function in a new goroutine.
-func (g *safeGroup) Go(f func(context.Context) error) {
+func (g *ctxGroup) Go(f func(context.Context) error) {
 	if g.sem != nil {
 		select {
 		case <-g.ctx.Done():
@@ -94,7 +106,7 @@ func (g *safeGroup) Go(f func(context.Context) error) {
 	}()
 }
 
-func (g *safeGroup) TryGo(f func(context.Context) error) bool {
+func (g *ctxGroup) TryGo(f func(context.Context) error) bool {
 	if g.sem != nil {
 		select {
 		case g.sem <- struct{}{}:
@@ -123,18 +135,7 @@ func (g *safeGroup) TryGo(f func(context.Context) error) bool {
 	return true
 }
 
-func (g *safeGroup) SetLimit(n int) {
-	if n < 0 {
-		g.sem = nil
-		return
-	}
-	if len(g.sem) != 0 {
-		panic(fmt.Errorf("errgroup: modify limit while %v goroutines in the safeGroup are still active", len(g.sem)))
-	}
-	g.sem = make(chan struct{}, n)
-}
-
-func (g *safeGroup) error(err error) {
+func (g *ctxGroup) error(err error) {
 	g.errOnce.Do(func() {
 		g.err = err
 		g.cancel(err)
@@ -145,7 +146,7 @@ func recoverWrapperCtx(f func(context.Context) error) func(context.Context) erro
 	return func(ctx context.Context) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				err = PanicError{Recovered: r}
+				err = NewPanicError(r)
 			}
 		}()
 		return f(ctx)
