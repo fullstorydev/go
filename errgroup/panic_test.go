@@ -55,7 +55,7 @@ func TestPanicErrorIntegration(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatal("expected panic error")
 	}
-	trace := pe.Trace()
+	trace := pe.StackTrace()
 	lines := strings.Split(trace, "\n")
 	if !strings.HasPrefix(lines[0], "goroutine") {
 		t.Error("expected goroutine stack trace")
@@ -76,15 +76,15 @@ func TestPanicErrorIntegration(t *testing.T) {
 	}
 }
 
-func TestPanicErrorTrace(t *testing.T) {
+func TestPanicErrorStackTrace(t *testing.T) {
 	err := NewPanicError("test panic")
-	trace := err.Trace()
+	trace := err.StackTrace()
 	lines := strings.Split(trace, "\n")
 	if !strings.HasPrefix(lines[0], "goroutine") {
 		t.Error("expected goroutine stack trace")
 	}
-	if !strings.Contains(lines[1], "errgroup.TestPanicErrorTrace") {
-		t.Error("expected errgroup.TestPanicErrorTrace")
+	if !strings.Contains(lines[1], "errgroup.TestPanicErrorStackTrace") {
+		t.Error("expected errgroup.TestPanicErrorStackTrace")
 	}
 	if !strings.Contains(lines[2], "errgroup/panic_test.go") {
 		t.Error("expected errgroup/panic_test.go")
