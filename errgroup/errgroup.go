@@ -61,7 +61,7 @@ func (g *Group) Go(f func() error) {
 		panicked := true
 		defer func() {
 			if panicked {
-				g.error(NewPanicError(recover()))
+				g.error(NewPanicErrorCallers(recover(), 2))
 			}
 		}()
 		err := f()
@@ -92,7 +92,7 @@ func (g *Group) TryGo(f func() error) bool {
 		panicked := true
 		defer func() {
 			if panicked {
-				g.error(NewPanicError(recover()))
+				g.error(NewPanicErrorCallers(recover(), 2))
 			}
 		}()
 		err := f()

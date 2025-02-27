@@ -76,7 +76,7 @@ func (g *ctxGroup) Go(f func(context.Context) error) {
 		panicked := true
 		defer func() {
 			if panicked {
-				g.error(NewPanicError(recover()))
+				g.error(NewPanicErrorCallers(recover(), 2))
 			}
 		}()
 		err := f(g.ctx)
@@ -111,7 +111,7 @@ func (g *ctxGroup) TryGo(f func(context.Context) error) bool {
 		panicked := true
 		defer func() {
 			if panicked {
-				g.error(NewPanicError(recover()))
+				g.error(NewPanicErrorCallers(recover(), 2))
 			}
 		}()
 		err := f(g.ctx)
