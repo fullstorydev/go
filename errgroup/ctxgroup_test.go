@@ -16,7 +16,7 @@ import (
 // JustErrors illustrates the use of a Group in place of a sync.WaitGroup to
 // simplify goroutine counting and error handling. This example is derived from
 // the sync.WaitGroup example at https://golang.org/pkg/sync/#example_WaitGroup.
-func ExampleSafeGroup_justErrors() {
+func ExampleCtxGroup_justErrors() {
 	g := errgroup.New(context.Background())
 	var urls = []string{
 		"http://www.golang.org/",
@@ -45,7 +45,7 @@ func ExampleSafeGroup_justErrors() {
 // task: the "Google Search 2.0" function from
 // https://talks.golang.org/2012/concurrency.slide#46, augmented with a Context
 // and error-handling.
-func ExampleSafeGroup_parallel() {
+func ExampleCtxGroup_parallel() {
 	Google := func(ctx context.Context, query string) ([]Result, error) {
 		g := errgroup.New(ctx)
 
@@ -82,7 +82,7 @@ func ExampleSafeGroup_parallel() {
 	// video result for "golang"
 }
 
-func TestZeroSafeGroup(t *testing.T) {
+func TestZeroCtxGroup(t *testing.T) {
 	err1 := errors.New("errgroup_test: 1")
 	err2 := errors.New("errgroup_test: 2")
 
@@ -117,7 +117,7 @@ func TestZeroSafeGroup(t *testing.T) {
 	}
 }
 
-func TestSafe(t *testing.T) {
+func TestCtx(t *testing.T) {
 	errDoom := errors.New("group_test: doomed")
 
 	cases := []struct {
@@ -146,10 +146,9 @@ func TestSafe(t *testing.T) {
 	}
 }
 
-func TestSafeTryGo(t *testing.T) {
-	g := errgroup.New(context.Background())
+func TestCtxTryGo(t *testing.T) {
+	g := errgroup.NewWithLimit(context.Background(), 42)
 	n := 42
-	g.SetLimit(42)
 	ch := make(chan struct{})
 	fn := func(ctx context.Context) error {
 		ch <- struct{}{}
@@ -170,14 +169,17 @@ func TestSafeTryGo(t *testing.T) {
 	}()
 	g.Wait()
 
-	if !g.TryGo(fn) {
-		t.Fatalf("TryGo should success but got fail after all goroutines.")
-	}
-	go func() { <-ch }()
-	g.Wait()
+	// disabled: cannot reuse ContextGroup.
+	/*
+		if !g.TryGo(fn) {
+			t.Fatalf("TryGo should success but got fail after all goroutines.")
+		}
+		go func() { <-ch }()
+		g.Wait()
+	*/
 
 	// Switch limit.
-	g.SetLimit(1)
+	g = errgroup.NewWithLimit(context.Background(), 1)
 	if !g.TryGo(fn) {
 		t.Fatalf("TryGo should success but got failed.")
 	}
@@ -188,7 +190,7 @@ func TestSafeTryGo(t *testing.T) {
 	g.Wait()
 
 	// Block all calls.
-	g.SetLimit(0)
+	g = errgroup.NewWithLimit(context.Background(), 0)
 	for i := 0; i < 1<<10; i++ {
 		if g.TryGo(fn) {
 			t.Fatalf("TryGo should fail but got succeded.")
@@ -197,11 +199,10 @@ func TestSafeTryGo(t *testing.T) {
 	g.Wait()
 }
 
-func TestSafeGoLimit(t *testing.T) {
+func TestCtxGoLimit(t *testing.T) {
 	const limit = 10
 
-	g := errgroup.New(context.Background())
-	g.SetLimit(limit)
+	g := errgroup.NewWithLimit(context.Background(), limit)
 	var active int32
 	for i := 0; i <= 1<<10; i++ {
 		g.Go(func(ctx context.Context) error {
@@ -219,7 +220,7 @@ func TestSafeGoLimit(t *testing.T) {
 	}
 }
 
-func TestSafePanic(t *testing.T) {
+func TestCtxPanic(t *testing.T) {
 	t.Run("Go", func(t *testing.T) {
 		g := errgroup.New(context.Background())
 		g.Go(func(ctx context.Context) error {
@@ -235,8 +236,7 @@ func TestSafePanic(t *testing.T) {
 	})
 
 	t.Run("TryGo", func(t *testing.T) {
-		g := errgroup.New(context.Background())
-		g.SetLimit(1)
+		g := errgroup.NewWithLimit(context.Background(), 1)
 		g.TryGo(func(ctx context.Context) error {
 			panic("test panic")
 		})
@@ -250,7 +250,7 @@ func TestSafePanic(t *testing.T) {
 	})
 }
 
-func TestSafeGoExitsEarly(t *testing.T) {
+func TestCtxGoExitsEarly(t *testing.T) {
 	var counter atomic.Uint32
 
 	fn := func(ctx context.Context) error {
@@ -261,8 +261,7 @@ func TestSafeGoExitsEarly(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	g := errgroup.New(ctx)
-	g.SetLimit(1)
+	g := errgroup.NewWithLimit(ctx, 1)
 
 	g.Go(fn) // this should succeed
 	g.Go(fn) // this should get stuck, then cancelled
@@ -274,7 +273,7 @@ func TestSafeGoExitsEarly(t *testing.T) {
 	}
 }
 
-func BenchmarkSafeGo(b *testing.B) {
+func BenchmarkCtxGo(b *testing.B) {
 	fn := func() {}
 	g := errgroup.New(context.Background())
 	b.ResetTimer()
