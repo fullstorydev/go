@@ -13,26 +13,11 @@ import (
 	"github.com/fullstorydev/go/errgroup"
 )
 
-var (
-	Web   = fakeSearch("web")
-	Image = fakeSearch("image")
-	Video = fakeSearch("video")
-)
-
-type Result string
-type Search func(ctx context.Context, query string) (Result, error)
-
-func fakeSearch(kind string) Search {
-	return func(_ context.Context, query string) (Result, error) {
-		return Result(fmt.Sprintf("%s result for %q", kind, query)), nil
-	}
-}
-
 // JustErrors illustrates the use of a Group in place of a sync.WaitGroup to
 // simplify goroutine counting and error handling. This example is derived from
 // the sync.WaitGroup example at https://golang.org/pkg/sync/#example_WaitGroup.
-func ExampleGroup_justErrors() {
-	g, _ := errgroup.WithContext(context.Background())
+func ExampleSafeGroup_justErrors() {
+	g := errgroup.New(context.Background())
 	var urls = []string{
 		"http://www.golang.org/",
 		"http://www.google.com/",
@@ -41,7 +26,7 @@ func ExampleGroup_justErrors() {
 	for _, url := range urls {
 		// Launch a goroutine to fetch the URL.
 		url := url // https://golang.org/doc/faq#closures_and_goroutines
-		g.Go(func() error {
+		g.Go(func(ctx context.Context) error {
 			// Fetch the URL.
 			resp, err := http.Get(url)
 			if err == nil {
@@ -60,15 +45,15 @@ func ExampleGroup_justErrors() {
 // task: the "Google Search 2.0" function from
 // https://talks.golang.org/2012/concurrency.slide#46, augmented with a Context
 // and error-handling.
-func ExampleGroup_parallel() {
+func ExampleSafeGroup_parallel() {
 	Google := func(ctx context.Context, query string) ([]Result, error) {
-		g, _ := errgroup.WithContext(ctx)
+		g := errgroup.New(ctx)
 
 		searches := []Search{Web, Image, Video}
 		results := make([]Result, len(searches))
 		for i, search := range searches {
 			i, search := i, search // https://golang.org/doc/faq#closures_and_goroutines
-			g.Go(func() error {
+			g.Go(func(ctx context.Context) error {
 				result, err := search(ctx, query)
 				if err == nil {
 					results[i] = result
@@ -97,7 +82,7 @@ func ExampleGroup_parallel() {
 	// video result for "golang"
 }
 
-func TestZeroGroup(t *testing.T) {
+func TestZeroSafeGroup(t *testing.T) {
 	err1 := errors.New("errgroup_test: 1")
 	err2 := errors.New("errgroup_test: 2")
 
@@ -112,12 +97,12 @@ func TestZeroGroup(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		g, _ := errgroup.WithContext(context.Background())
+		g := errgroup.New(context.Background())
 
 		var firstErr error
 		for i, err := range tc.errs {
 			err := err
-			g.Go(func() error { return err })
+			g.Go(func(ctx context.Context) error { return err })
 
 			if firstErr == nil && err != nil {
 				firstErr = err
@@ -132,7 +117,7 @@ func TestZeroGroup(t *testing.T) {
 	}
 }
 
-func TestWithContext(t *testing.T) {
+func TestSafe(t *testing.T) {
 	errDoom := errors.New("group_test: doomed")
 
 	cases := []struct {
@@ -146,11 +131,11 @@ func TestWithContext(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		g, _ := errgroup.WithContext(context.Background())
+		g := errgroup.New(context.Background())
 
 		for _, err := range tc.errs {
 			err := err
-			g.Go(func() error { return err })
+			g.Go(func(ctx context.Context) error { return err })
 		}
 
 		if err := g.Wait(); err != tc.want {
@@ -161,12 +146,12 @@ func TestWithContext(t *testing.T) {
 	}
 }
 
-func TestTryGo(t *testing.T) {
-	g, _ := errgroup.WithContext(context.Background())
+func TestSafeTryGo(t *testing.T) {
+	g := errgroup.New(context.Background())
 	n := 42
 	g.SetLimit(42)
 	ch := make(chan struct{})
-	fn := func() error {
+	fn := func(ctx context.Context) error {
 		ch <- struct{}{}
 		return nil
 	}
@@ -212,14 +197,14 @@ func TestTryGo(t *testing.T) {
 	g.Wait()
 }
 
-func TestGoLimit(t *testing.T) {
+func TestSafeGoLimit(t *testing.T) {
 	const limit = 10
 
-	g, _ := errgroup.WithContext(context.Background())
+	g := errgroup.New(context.Background())
 	g.SetLimit(limit)
 	var active int32
 	for i := 0; i <= 1<<10; i++ {
-		g.Go(func() error {
+		g.Go(func(ctx context.Context) error {
 			n := atomic.AddInt32(&active, 1)
 			if n > limit {
 				return fmt.Errorf("saw %d active goroutines; want ≤ %d", n, limit)
@@ -234,10 +219,10 @@ func TestGoLimit(t *testing.T) {
 	}
 }
 
-func TestPanic(t *testing.T) {
+func TestSafePanic(t *testing.T) {
 	t.Run("Go", func(t *testing.T) {
-		g, _ := errgroup.WithContext(context.Background())
-		g.Go(func() error {
+		g := errgroup.New(context.Background())
+		g.Go(func(ctx context.Context) error {
 			panic("test panic")
 		})
 		err := g.Wait()
@@ -250,9 +235,9 @@ func TestPanic(t *testing.T) {
 	})
 
 	t.Run("TryGo", func(t *testing.T) {
-		g, _ := errgroup.WithContext(context.Background())
+		g := errgroup.New(context.Background())
 		g.SetLimit(1)
-		g.TryGo(func() error {
+		g.TryGo(func(ctx context.Context) error {
 			panic("test panic")
 		})
 		err := g.Wait()
@@ -265,19 +250,18 @@ func TestPanic(t *testing.T) {
 	})
 }
 
-func TestGoExitsEarly(t *testing.T) {
+func TestSafeGoExitsEarly(t *testing.T) {
 	var counter atomic.Uint32
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	fn := func() error {
+	fn := func(ctx context.Context) error {
 		counter.Add(1)
 		<-ctx.Done() // wait until cancelled
 		return nil
 	}
 
-	g, _ := errgroup.WithContext(ctx)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	g := errgroup.New(ctx)
 	g.SetLimit(1)
 
 	g.Go(fn) // this should succeed
@@ -290,13 +274,13 @@ func TestGoExitsEarly(t *testing.T) {
 	}
 }
 
-func BenchmarkGo(b *testing.B) {
+func BenchmarkSafeGo(b *testing.B) {
 	fn := func() {}
-	g, _ := errgroup.WithContext(context.Background())
+	g := errgroup.New(context.Background())
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		g.Go(func() error { fn(); return nil })
+		g.Go(func(ctx context.Context) error { fn(); return nil })
 	}
 	g.Wait()
 }
