@@ -9,14 +9,15 @@ import (
 // - automatically catches panics
 // - forces the correct context
 // - manages the context lifetime
-// - early-exits any calls to Go or TryGo once the context is canceled
-// NB: unlike the golang version, ContextGroup cannot be reused after Wait() has
+// - early-exits any calls to Go() or TryGo() once the context is canceled
+//
+// Unlike the golang version, ContextGroup cannot be reused after Wait() has
 // been called, because the context is dead and no new go funcs will be run.
 type ContextGroup interface {
 	// Go calls the given function in a new goroutine, passing the group context.
 	//
 	// The first call to return a non-nil error cancels the group's context.
-	// The error will be returned by Wait.
+	// The error will be returned by Wait().
 	//
 	// Go returns immediately if the group context is already cancelled.
 	Go(func(context.Context) error)
@@ -99,8 +100,15 @@ func (g *ctxGroup) Go(f func(context.Context) error) {
 	g.wg.Add(1)
 	go func() {
 		defer g.done()
-
-		if err := recoverWrapperCtx(f)(g.ctx); err != nil {
+		panicked := true
+		defer func() {
+			if panicked {
+				g.error(NewPanicError(recover()))
+			}
+		}()
+		err := f(g.ctx)
+		panicked = false
+		if err != nil {
 			g.error(err)
 		}
 	}()
@@ -127,8 +135,15 @@ func (g *ctxGroup) TryGo(f func(context.Context) error) bool {
 	g.wg.Add(1)
 	go func() {
 		defer g.done()
-
-		if err := recoverWrapperCtx(f)(g.ctx); err != nil {
+		panicked := true
+		defer func() {
+			if panicked {
+				g.error(NewPanicError(recover()))
+			}
+		}()
+		err := f(g.ctx)
+		panicked = false
+		if err != nil {
 			g.error(err)
 		}
 	}()
@@ -142,13 +157,18 @@ func (g *ctxGroup) error(err error) {
 	})
 }
 
-func recoverWrapperCtx(f func(context.Context) error) func(context.Context) error {
-	return func(ctx context.Context) (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				err = NewPanicError(r)
-			}
-		}()
-		return f(ctx)
+type ctxGroupBuilder struct {
+	limit int
+}
+
+func (b ctxGroupBuilder) New(ctx context.Context) ContextGroup {
+	ctx, cancel := context.WithCancelCause(ctx)
+	return &ctxGroup{ctx: ctx, cancel: cancel, sem: make(chan struct{}, b.limit)}
+}
+
+func Limit(limit int) ctxGroupBuilder {
+	if limit < 0 {
+		panic("negative limit")
 	}
+	return ctxGroupBuilder{limit: limit}
 }
