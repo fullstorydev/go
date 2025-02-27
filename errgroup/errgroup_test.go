@@ -1,3 +1,7 @@
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package errgroup_test
 
 import (
@@ -32,7 +36,7 @@ func fakeSearch(kind string) Search {
 // simplify goroutine counting and error handling. This example is derived from
 // the sync.WaitGroup example at https://golang.org/pkg/sync/#example_WaitGroup.
 func ExampleGroup_justErrors() {
-	g, _ := errgroup.WithContext(context.Background())
+	g := new(errgroup.Group)
 	var urls = []string{
 		"http://www.golang.org/",
 		"http://www.google.com/",
@@ -62,7 +66,7 @@ func ExampleGroup_justErrors() {
 // and error-handling.
 func ExampleGroup_parallel() {
 	Google := func(ctx context.Context, query string) ([]Result, error) {
-		g, _ := errgroup.WithContext(ctx)
+		g, ctx := errgroup.WithContext(ctx)
 
 		searches := []Search{Web, Image, Video}
 		results := make([]Result, len(searches))
@@ -112,7 +116,7 @@ func TestZeroGroup(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		g, _ := errgroup.WithContext(context.Background())
+		g := new(errgroup.Group)
 
 		var firstErr error
 		for i, err := range tc.errs {
@@ -146,7 +150,7 @@ func TestWithContext(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		g, _ := errgroup.WithContext(context.Background())
+		g, ctx := errgroup.WithContext(context.Background())
 
 		for _, err := range tc.errs {
 			err := err
@@ -158,11 +162,23 @@ func TestWithContext(t *testing.T) {
 				"g.Wait() = %v; want %v",
 				g, tc.errs, err, tc.want)
 		}
+
+		canceled := false
+		select {
+		case <-ctx.Done():
+			canceled = true
+		default:
+		}
+		if !canceled {
+			t.Errorf("after %T.Go(func() error { return err }) for err in %v\n"+
+				"ctx.Done() was not closed",
+				g, tc.errs)
+		}
 	}
 }
 
 func TestTryGo(t *testing.T) {
-	g, _ := errgroup.WithContext(context.Background())
+	g := &errgroup.Group{}
 	n := 42
 	g.SetLimit(42)
 	ch := make(chan struct{})
@@ -215,7 +231,7 @@ func TestTryGo(t *testing.T) {
 func TestGoLimit(t *testing.T) {
 	const limit = 10
 
-	g, _ := errgroup.WithContext(context.Background())
+	g := &errgroup.Group{}
 	g.SetLimit(limit)
 	var active int32
 	for i := 0; i <= 1<<10; i++ {
@@ -236,7 +252,7 @@ func TestGoLimit(t *testing.T) {
 
 func TestPanic(t *testing.T) {
 	t.Run("Go", func(t *testing.T) {
-		g, _ := errgroup.WithContext(context.Background())
+		g := &errgroup.Group{}
 		g.Go(func() error {
 			panic("test panic")
 		})
@@ -250,7 +266,7 @@ func TestPanic(t *testing.T) {
 	})
 
 	t.Run("TryGo", func(t *testing.T) {
-		g, _ := errgroup.WithContext(context.Background())
+		g := &errgroup.Group{}
 		g.SetLimit(1)
 		g.TryGo(func() error {
 			panic("test panic")
@@ -295,7 +311,7 @@ func TestGoExitsEarly(t *testing.T) {
 
 func BenchmarkGo(b *testing.B) {
 	fn := func() {}
-	g, _ := errgroup.WithContext(context.Background())
+	g := &errgroup.Group{}
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
