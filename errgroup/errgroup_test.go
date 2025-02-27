@@ -49,7 +49,7 @@ func ExampleGroup_justErrors() {
 			// Fetch the URL.
 			resp, err := http.Get(url)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 			return err
 		})
@@ -88,7 +88,7 @@ func ExampleGroup_parallel() {
 
 	results, err := Google(context.Background(), "golang")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		return
 	}
 	for _, result := range results {
@@ -199,13 +199,13 @@ func TestTryGo(t *testing.T) {
 			<-ch
 		}
 	}()
-	g.Wait()
+	_ = g.Wait()
 
 	if !g.TryGo(fn) {
 		t.Fatalf("TryGo should success but got fail after all goroutines.")
 	}
 	go func() { <-ch }()
-	g.Wait()
+	_ = g.Wait()
 
 	// Switch limit.
 	g.SetLimit(1)
@@ -216,7 +216,7 @@ func TestTryGo(t *testing.T) {
 		t.Fatalf("TryGo should fail but succeeded.")
 	}
 	go func() { <-ch }()
-	g.Wait()
+	_ = g.Wait()
 
 	// Block all calls.
 	g.SetLimit(0)
@@ -225,7 +225,7 @@ func TestTryGo(t *testing.T) {
 			t.Fatalf("TryGo should fail but got succeded.")
 		}
 	}
-	g.Wait()
+	_ = g.Wait()
 }
 
 func TestGoLimit(t *testing.T) {
@@ -302,7 +302,7 @@ func TestGoExitsEarly(t *testing.T) {
 	g.Go(fn) // this should succeed
 	g.Go(fn) // this should get stuck, then cancelled
 
-	g.Wait()
+	_ = g.Wait()
 
 	if count := counter.Load(); count != 1 {
 		t.Fatalf("Counter should be 1, got %d", count)
@@ -317,5 +317,5 @@ func BenchmarkGo(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		g.Go(func() error { fn(); return nil })
 	}
-	g.Wait()
+	_ = g.Wait()
 }

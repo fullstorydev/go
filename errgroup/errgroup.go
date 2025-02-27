@@ -52,9 +52,7 @@ func (g *Group) Wait() error {
 // The error will be returned by Wait.
 func (g *Group) Go(f func() error) {
 	if g.sem != nil {
-		select {
-		case g.sem <- token{}:
-		}
+		g.sem <- token{}
 	}
 
 	g.wg.Add(1)
