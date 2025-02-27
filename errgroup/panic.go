@@ -1,40 +1,56 @@
 package errgroup
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
+	"strings"
 )
 
 const (
-	pcFrames = 256
+	pcFrames  = 1 << 8
+	stackSize = 1 << 16
+)
+
+var (
+	newline = []byte{'\n'}
 )
 
 // NewPanicError creates a new PanicError with the given recovered panic value.
-// The caller stack frames are captured and attached.
+// The caller stack frames are captured and attached, starting with the caller of NewPanicError.
 func NewPanicError(recovered any) *PanicError {
-	pcs := make([]uintptr, pcFrames)
-	pcs = pcs[:runtime.Callers(1, pcs)]
-
-	// TODO: capture goroutine number?
-
-	return &PanicError{recovered: recovered, pcs: pcs}
+	return NewPanicErrorCallers(recovered, 2)
 }
 
 // NewPanicErrorCallers creates a new PanicError with the given recovered panic value.
-// The caller stack frames are captured and attached.
+//
+// The argument skip is the number of stack frames to skip before recording in pc,
+// with 0 identifying the frame for NewPanicErrorCallers itself and 1 identifying the
+// caller of NewPanicErrorCallers.
 func NewPanicErrorCallers(recovered any, skip int) *PanicError {
 	pcs := make([]uintptr, pcFrames)
 	pcs = pcs[:runtime.Callers(skip+1, pcs)]
 
-	// TODO: capture goroutine number?
+	// Manually prune the string stack trace based on skip (this is awkward).
+	skipLines := 1 + 2*skip
+	stack := make([]byte, stackSize)
+	stack = stack[:runtime.Stack(stack, false)]
+	var sb strings.Builder
+	for i, line := range bytes.Split(stack, newline) {
+		if i == 0 || i >= skipLines {
+			sb.Write(line)
+			sb.WriteByte('\n')
+		}
+	}
 
-	return &PanicError{recovered: recovered, pcs: pcs}
+	return &PanicError{recovered: recovered, pcs: pcs, stack: sb.String()}
 }
 
 // PanicError represents a wrapped recovered panic value.
 type PanicError struct {
 	recovered any
 	pcs       []uintptr
+	stack     string
 }
 
 // Recovered returns the original value.
@@ -61,7 +77,7 @@ func (e *PanicError) Format(s fmt.State, verb rune) {
 	case 'v':
 		if s.Flag('+') {
 			// Detailed format: include stack trace
-			_, _ = fmt.Fprintf(s, "panic: %v\nStack trace:\n%s", e.recovered, e.StackTrace())
+			_, _ = fmt.Fprintf(s, "panic: %v [recovered]\n\n%s", e.recovered, e.Trace())
 			return
 		} else if s.Flag('#') {
 			_, _ = fmt.Fprintf(s, "&errgroup.PanicError{recovered:%#v}", e.recovered)
@@ -84,8 +100,7 @@ func (e *PanicError) StackFrames() *runtime.Frames {
 	return runtime.CallersFrames(e.Stack())
 }
 
-// StackTrace returns multiline string format of the originally captured stack
-// approximating the format of an uncaught panic.
-func (e *PanicError) StackTrace() string {
-	return "TODO"
+// Trace returns the originally captured stack trace as a multiline string.
+func (e *PanicError) Trace() string {
+	return e.stack
 }
