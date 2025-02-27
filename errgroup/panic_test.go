@@ -14,7 +14,7 @@ func TestPanicError(t *testing.T) {
 		{"%v", `panic: test panic`},
 		{"%s", `panic: test panic`},
 		{"%q", `"panic: test panic"`},
-		{"%+v", "panic: test panic\nStack trace:\n"},
+		{"%+v", "panic: test panic\nStack trace:\nTODO"},
 		{"%#v", `&errgroup.PanicError{recovered:"test panic"}`},
 	} {
 		got := fmt.Sprintf(tc.fmt, err)

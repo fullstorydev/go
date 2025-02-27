@@ -16,7 +16,7 @@ import (
 // JustErrors illustrates the use of a Group in place of a sync.WaitGroup to
 // simplify goroutine counting and error handling. This example is derived from
 // the sync.WaitGroup example at https://golang.org/pkg/sync/#example_WaitGroup.
-func ExampleCtxGroup_justErrors() {
+func ExampleNew_justErrors() {
 	g := errgroup.New(context.Background())
 	var urls = []string{
 		"http://www.golang.org/",
@@ -30,7 +30,7 @@ func ExampleCtxGroup_justErrors() {
 			// Fetch the URL.
 			resp, err := http.Get(url)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 			return err
 		})
@@ -45,7 +45,7 @@ func ExampleCtxGroup_justErrors() {
 // task: the "Google Search 2.0" function from
 // https://talks.golang.org/2012/concurrency.slide#46, augmented with a Context
 // and error-handling.
-func ExampleCtxGroup_parallel() {
+func ExampleNew_parallel() {
 	Google := func(ctx context.Context, query string) ([]Result, error) {
 		g := errgroup.New(ctx)
 
@@ -69,7 +69,7 @@ func ExampleCtxGroup_parallel() {
 
 	results, err := Google(context.Background(), "golang")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		return
 	}
 	for _, result := range results {
@@ -82,7 +82,7 @@ func ExampleCtxGroup_parallel() {
 	// video result for "golang"
 }
 
-func TestZeroCtxGroup(t *testing.T) {
+func TestZeroNew(t *testing.T) {
 	err1 := errors.New("errgroup_test: 1")
 	err2 := errors.New("errgroup_test: 2")
 
@@ -117,7 +117,7 @@ func TestZeroCtxGroup(t *testing.T) {
 	}
 }
 
-func TestCtx(t *testing.T) {
+func TestNew(t *testing.T) {
 	errDoom := errors.New("group_test: doomed")
 
 	cases := []struct {
@@ -146,7 +146,7 @@ func TestCtx(t *testing.T) {
 	}
 }
 
-func TestCtxTryGo(t *testing.T) {
+func TestNewTryGo(t *testing.T) {
 	g := errgroup.NewWithLimit(context.Background(), 42)
 	n := 42
 	ch := make(chan struct{})
@@ -167,7 +167,7 @@ func TestCtxTryGo(t *testing.T) {
 			<-ch
 		}
 	}()
-	g.Wait()
+	_ = g.Wait()
 
 	// disabled: cannot reuse ContextGroup.
 	/*
@@ -187,7 +187,7 @@ func TestCtxTryGo(t *testing.T) {
 		t.Fatalf("TryGo should fail but succeeded.")
 	}
 	go func() { <-ch }()
-	g.Wait()
+	_ = g.Wait()
 
 	// Block all calls.
 	g = errgroup.NewWithLimit(context.Background(), 0)
@@ -196,10 +196,10 @@ func TestCtxTryGo(t *testing.T) {
 			t.Fatalf("TryGo should fail but got succeded.")
 		}
 	}
-	g.Wait()
+	_ = g.Wait()
 }
 
-func TestCtxGoLimit(t *testing.T) {
+func TestNewGoLimit(t *testing.T) {
 	const limit = 10
 
 	g := errgroup.NewWithLimit(context.Background(), limit)
@@ -220,7 +220,7 @@ func TestCtxGoLimit(t *testing.T) {
 	}
 }
 
-func TestCtxPanic(t *testing.T) {
+func TestNewPanic(t *testing.T) {
 	t.Run("Go", func(t *testing.T) {
 		g := errgroup.New(context.Background())
 		g.Go(func(ctx context.Context) error {
@@ -250,7 +250,7 @@ func TestCtxPanic(t *testing.T) {
 	})
 }
 
-func TestCtxGoExitsEarly(t *testing.T) {
+func TestNewGoExitsEarly(t *testing.T) {
 	var counter atomic.Uint32
 
 	fn := func(ctx context.Context) error {
@@ -266,14 +266,14 @@ func TestCtxGoExitsEarly(t *testing.T) {
 	g.Go(fn) // this should succeed
 	g.Go(fn) // this should get stuck, then cancelled
 
-	g.Wait()
+	_ = g.Wait()
 
 	if count := counter.Load(); count != 1 {
 		t.Fatalf("Counter should be 1, got %d", count)
 	}
 }
 
-func BenchmarkCtxGo(b *testing.B) {
+func BenchmarkNewGo(b *testing.B) {
 	fn := func() {}
 	g := errgroup.New(context.Background())
 	b.ResetTimer()
@@ -281,5 +281,5 @@ func BenchmarkCtxGo(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		g.Go(func(ctx context.Context) error { fn(); return nil })
 	}
-	g.Wait()
+	_ = g.Wait()
 }

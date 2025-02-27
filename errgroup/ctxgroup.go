@@ -5,40 +5,13 @@ import (
 	"sync"
 )
 
-// ContextGroup is a variant of [golang.org/x/sync/errgroup.Group] that:
-// - automatically catches panics
-// - forces the correct context
-// - manages the context lifetime
-// - early-exits any calls to Go() or TryGo() once the context is canceled
-//
-// Unlike the golang version, ContextGroup cannot be reused after Wait() has
-// been called, because the context is dead and no new go funcs will be run.
-type ContextGroup interface {
-	// Go calls the given function in a new goroutine, passing the group context.
-	//
-	// The first call to return a non-nil error cancels the group's context.
-	// The error will be returned by Wait().
-	//
-	// Go returns immediately if the group context is already cancelled.
-	Go(func(context.Context) error)
-	// Wait blocks until all function calls from the Go method have returned, then
-	// returns the first non-nil error (if any) from them.
-	Wait() error
-	// TryGo calls the given function in a new goroutine only if the number of
-	// active goroutines in the group is currently below the configured limit.
-	//
-	// The return value reports whether the goroutine was started.
-	// TryGo returns true immediately if the group context is already cancelled.
-	TryGo(func(context.Context) error) bool
-}
-
 type ctxGroup struct {
 	ctx    context.Context
 	cancel func(error)
 
 	wg sync.WaitGroup
 
-	sem chan struct{}
+	sem chan token
 
 	errOnce sync.Once
 	err     error
@@ -71,7 +44,7 @@ func NewWithLimit(ctx context.Context, limit int) ContextGroup {
 		panic("negative limit")
 	}
 	ctx, cancel := context.WithCancelCause(ctx)
-	return &ctxGroup{ctx: ctx, cancel: cancel, sem: make(chan struct{}, limit)}
+	return &ctxGroup{ctx: ctx, cancel: cancel, sem: make(chan token, limit)}
 }
 
 // Wait blocks until all function calls from the Go method have returned, then returns the first non-nil error (if any) from them.
@@ -88,7 +61,7 @@ func (g *ctxGroup) Go(f func(context.Context) error) {
 		case <-g.ctx.Done():
 			g.error(g.ctx.Err())
 			return
-		case g.sem <- struct{}{}:
+		case g.sem <- token{}:
 		}
 	}
 
@@ -117,7 +90,7 @@ func (g *ctxGroup) Go(f func(context.Context) error) {
 func (g *ctxGroup) TryGo(f func(context.Context) error) bool {
 	if g.sem != nil {
 		select {
-		case g.sem <- struct{}{}:
+		case g.sem <- token{}:
 			// Note: this allows barging iff channels in general allow barging.
 		case <-g.ctx.Done():
 			g.error(g.ctx.Err())
@@ -163,12 +136,15 @@ type ctxGroupBuilder struct {
 
 func (b ctxGroupBuilder) New(ctx context.Context) ContextGroup {
 	ctx, cancel := context.WithCancelCause(ctx)
-	return &ctxGroup{ctx: ctx, cancel: cancel, sem: make(chan struct{}, b.limit)}
+	var sem chan token
+	if b.limit >= 0 {
+		sem = make(chan token, b.limit)
+	}
+	return &ctxGroup{ctx: ctx, cancel: cancel, sem: sem}
 }
 
-func Limit(limit int) ctxGroupBuilder {
-	if limit < 0 {
-		panic("negative limit")
-	}
+// WithLimit begins creating a New ContextGroup which limits the number of
+// active goroutines in this group to at most n. A negative value indicates no limit.
+func WithLimit(limit int) ctxGroupBuilder {
 	return ctxGroupBuilder{limit: limit}
 }
