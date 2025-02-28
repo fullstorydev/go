@@ -35,18 +35,6 @@ func New(ctx context.Context) ContextGroup {
 	return &ctxGroup{ctx: ctx, cancel: cancel}
 }
 
-// NewWithLimit returns a new ContextGroup derived from ctx.
-//
-// Any subsequent call to the Go method will block until it can add an active
-// goroutine without exceeding the configured limit.
-func NewWithLimit(ctx context.Context, limit int) ContextGroup {
-	if limit < 0 {
-		panic("negative limit")
-	}
-	ctx, cancel := context.WithCancelCause(ctx)
-	return &ctxGroup{ctx: ctx, cancel: cancel, sem: make(chan token, limit)}
-}
-
 // Wait blocks until all function calls from the Go method have returned, then returns the first non-nil error (if any) from them.
 func (g *ctxGroup) Wait() error {
 	g.wg.Wait()

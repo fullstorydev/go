@@ -147,7 +147,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewTryGo(t *testing.T) {
-	g := errgroup.NewWithLimit(context.Background(), 42)
+	g := errgroup.WithLimit(42).New(context.Background())
 	n := 42
 	ch := make(chan struct{})
 	fn := func(ctx context.Context) error {
@@ -179,7 +179,7 @@ func TestNewTryGo(t *testing.T) {
 	*/
 
 	// Switch limit.
-	g = errgroup.NewWithLimit(context.Background(), 1)
+	g = errgroup.WithLimit(1).New(context.Background())
 	if !g.TryGo(fn) {
 		t.Fatalf("TryGo should success but got failed.")
 	}
@@ -190,7 +190,7 @@ func TestNewTryGo(t *testing.T) {
 	_ = g.Wait()
 
 	// Block all calls.
-	g = errgroup.NewWithLimit(context.Background(), 0)
+	g = errgroup.WithLimit(0).New(context.Background())
 	for i := 0; i < 1<<10; i++ {
 		if g.TryGo(fn) {
 			t.Fatalf("TryGo should fail but got succeded.")
@@ -202,7 +202,7 @@ func TestNewTryGo(t *testing.T) {
 func TestNewGoLimit(t *testing.T) {
 	const limit = 10
 
-	g := errgroup.NewWithLimit(context.Background(), limit)
+	g := errgroup.WithLimit(limit).New(context.Background())
 	var active int32
 	for i := 0; i <= 1<<10; i++ {
 		g.Go(func(ctx context.Context) error {
@@ -236,7 +236,7 @@ func TestNewPanic(t *testing.T) {
 	})
 
 	t.Run("TryGo", func(t *testing.T) {
-		g := errgroup.NewWithLimit(context.Background(), 1)
+		g := errgroup.WithLimit(1).New(context.Background())
 		g.TryGo(func(ctx context.Context) error {
 			panic("test panic")
 		})
@@ -261,7 +261,7 @@ func TestNewGoExitsEarly(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	g := errgroup.NewWithLimit(ctx, 1)
+	g := errgroup.WithLimit(1).New(ctx)
 
 	g.Go(fn) // this should succeed
 	g.Go(fn) // this should get stuck, then cancelled
