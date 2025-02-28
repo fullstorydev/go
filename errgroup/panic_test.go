@@ -3,6 +3,7 @@ package errgroup
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -93,7 +94,7 @@ func TestPanicErrorStackTrace(t *testing.T) {
 
 func TestPanicErrorStackFrames(t *testing.T) {
 	err := NewPanicError("test panic")
-	first, _ := err.StackFrames().Next()
+	first, _ := runtime.CallersFrames(err.StackFrames()).Next()
 	const want = `github.com/fullstorydev/go/errgroup.TestPanicErrorStackFrames`
 	if got := first.Function; got != want {
 		t.Errorf("got:  %q, want: %q", got, want)
@@ -102,7 +103,7 @@ func TestPanicErrorStackFrames(t *testing.T) {
 
 func TestPanicErrorStackFramesCallers(t *testing.T) {
 	err := NewPanicErrorCallers("test panic", 0)
-	first, _ := err.StackFrames().Next()
+	first, _ := runtime.CallersFrames(err.StackFrames()).Next()
 	const want = `github.com/fullstorydev/go/errgroup.NewPanicErrorCallers`
 	if got := first.Function; got != want {
 		t.Errorf("got:  %q, want: %q", got, want)
