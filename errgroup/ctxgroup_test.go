@@ -28,7 +28,7 @@ func ExampleNew_justErrors() {
 		url := url // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func(ctx context.Context) error {
 			// Fetch the URL.
-			resp, err := http.Get(url)
+			resp, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 			if err == nil {
 				_ = resp.Body.Close()
 			}

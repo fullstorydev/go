@@ -1,6 +1,8 @@
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the [LICENSE.google] file.
+//
+// Forked from v0.11.0 - https://go.googlesource.com/sync/+/refs/tags/v0.11.0/LICENSE
 
 package errgroup_test
 
