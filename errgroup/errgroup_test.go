@@ -60,6 +60,9 @@ func ExampleGroup_justErrors() {
 	if err := g.Wait(); err == nil {
 		fmt.Println("Successfully fetched all URLs.")
 	}
+
+	// Output:
+	// Successfully fetched all URLs.
 }
 
 // Parallel illustrates the use of a Group for synchronizing a simple parallel

@@ -28,7 +28,11 @@ func ExampleNew_justErrors() {
 		url := url // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func(ctx context.Context) error {
 			// Fetch the URL.
-			resp, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+			if err != nil {
+				panic(err)
+			}
+			resp, err := http.DefaultClient.Do(req)
 			if err == nil {
 				_ = resp.Body.Close()
 			}
@@ -39,6 +43,9 @@ func ExampleNew_justErrors() {
 	if err := g.Wait(); err == nil {
 		fmt.Println("Successfully fetched all URLs.")
 	}
+
+	// Output:
+	// Successfully fetched all URLs.
 }
 
 // Parallel illustrates the use of a Group for synchronizing a simple parallel
