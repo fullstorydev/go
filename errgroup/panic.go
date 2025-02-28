@@ -93,14 +93,9 @@ func (e *PanicError) Format(s fmt.State, verb rune) {
 	_, _ = fmt.Fprintf(s, "panic: %v", e.recovered)
 }
 
-// Stack returns a copy of the originally captured stack as PCs.
-func (e *PanicError) Stack() []uintptr {
+// StackFrames returns a slice of program counters composing this error's stacktrace.
+func (e *PanicError) StackFrames() []uintptr {
 	return append([]uintptr{}, e.pcs...)
-}
-
-// StackFrames returns a copy of the original captured stack as runtime.Frames.
-func (e *PanicError) StackFrames() *runtime.Frames {
-	return runtime.CallersFrames(e.Stack())
 }
 
 // StackTrace returns the originally captured stack trace as a multiline string.
