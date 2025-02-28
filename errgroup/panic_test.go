@@ -16,11 +16,11 @@ func TestPanicError(t *testing.T) {
 	}{
 		{"%v", `panic: test panic`},
 		{"%s", `panic: test panic`},
-		{"%q", `"panic: test panic"`},
-		{"%#v", `&errgroup.PanicError{recovered:"test panic"}`},
+		{"%q", `"panic: test panic`},
+		{"%#v", `&errgroup.PanicError{recovered:"test panic"`},
 	} {
 		got := fmt.Sprintf(tc.fmt, err)
-		if got != tc.want {
+		if !strings.HasPrefix(got, tc.want) {
 			t.Errorf("got:  %q, want: %q", got, tc.want)
 		}
 	}

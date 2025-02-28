@@ -54,14 +54,19 @@ type PanicError struct {
 }
 
 var _ error = (*PanicError)(nil)
-var _ fmt.Formatter = (*PanicError)(nil)
 
 // Recovered returns the original value.
 func (e *PanicError) Recovered() any {
 	return e.recovered
 }
 
+// Error returns the full error, including stack trace.
 func (e *PanicError) Error() string {
+	return fmt.Sprintf("panic: %v [recovered]\n\n%s", e.recovered, e.stack)
+}
+
+// Message returns a short description, with the string value of the recovered object.
+func (e *PanicError) Message() string {
 	return fmt.Sprintf("panic: %v", e.recovered)
 }
 
@@ -72,25 +77,6 @@ func (e *PanicError) Unwrap() error {
 		return wrapped
 	}
 	return nil
-}
-
-// Format implements the fmt.Formatter interface to support rich formatting for %+v and %#v.
-func (e *PanicError) Format(s fmt.State, verb rune) {
-	switch verb {
-	case 'v':
-		if s.Flag('+') {
-			// Detailed format: include stack trace
-			_, _ = fmt.Fprintf(s, "panic: %v [recovered]\n\n%s", e.recovered, e.StackTrace())
-			return
-		} else if s.Flag('#') {
-			_, _ = fmt.Fprintf(s, "&errgroup.PanicError{recovered:%#v}", e.recovered)
-			return
-		}
-	case 'q':
-		_, _ = fmt.Fprintf(s, "%q", e.Error())
-		return
-	}
-	_, _ = fmt.Fprintf(s, "panic: %v", e.recovered)
 }
 
 // StackFrames returns a slice of program counters composing this error's stacktrace.

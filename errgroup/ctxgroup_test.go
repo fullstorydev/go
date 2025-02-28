@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -237,7 +238,7 @@ func TestNewPanic(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Wait should return an error")
 		}
-		if err.Error() != "panic: test panic" {
+		if !strings.HasPrefix(err.Error(), "panic: test panic") {
 			t.Fatalf("Error message mismatch: %v", err)
 		}
 	})
@@ -251,7 +252,7 @@ func TestNewPanic(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Wait should return an error")
 		}
-		if err.Error() != "panic: test panic" {
+		if !strings.HasPrefix(err.Error(), "panic: test panic") {
 			t.Fatalf("Error message mismatch: %v", err)
 		}
 	})
