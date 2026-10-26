@@ -45,17 +45,7 @@ func (g *ctxGroup) Wait() error {
 // Go calls the given function in a new goroutine.
 func (g *ctxGroup) Go(f func(context.Context) error) {
 	if g.sem != nil {
-		select {
-		case <-g.ctx.Done():
-			g.error(g.ctx.Err())
-			return
-		case g.sem <- token{}:
-		}
-	}
-
-	if err := g.ctx.Err(); err != nil {
-		g.error(err)
-		return
+		g.sem <- token{}
 	}
 
 	g.wg.Add(1)
@@ -80,17 +70,9 @@ func (g *ctxGroup) TryGo(f func(context.Context) error) bool {
 		select {
 		case g.sem <- token{}:
 			// Note: this allows barging iff channels in general allow barging.
-		case <-g.ctx.Done():
-			g.error(g.ctx.Err())
-			return true
 		default:
 			return false
 		}
-	}
-
-	if err := g.ctx.Err(); err != nil {
-		g.error(err)
-		return true
 	}
 
 	g.wg.Add(1)

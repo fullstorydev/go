@@ -295,26 +295,50 @@ func TestNewPanic(t *testing.T) {
 	})
 }
 
-func TestNewGoExitsEarly(t *testing.T) {
+func TestNewGoRunsAfterCancel(t *testing.T) {
 	var counter atomic.Uint32
-
 	fn := func(ctx context.Context) error {
 		counter.Add(1)
 		<-ctx.Done() // wait until cancelled
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
 	g := errgroup.WithLimit(1).New(ctx)
 
-	g.Go(fn) // this should succeed
-	g.Go(fn) // this should get stuck, then cancelled
+	g.Go(fn)
+	cancel()
+	g.Go(fn) // waits for the first to exit, then runs anyway
 
-	_ = g.Wait()
+	if err := g.Wait(); err != nil {
+		t.Fatalf("Wait should return nil, got %v", err)
+	}
+	if count := counter.Load(); count != 2 {
+		t.Fatalf("Counter should be 2, got %d", count)
+	}
+}
 
-	if count := counter.Load(); count != 1 {
-		t.Fatalf("Counter should be 1, got %d", count)
+func TestNewGoRunsAlreadyCancelled(t *testing.T) {
+	var counter atomic.Uint32
+	fn := func(ctx context.Context) error {
+		counter.Add(1)
+		return ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	g := errgroup.WithLimit(2).New(ctx)
+
+	g.Go(fn)
+	if !g.TryGo(fn) {
+		t.Fatalf("TryGo should succeed but got fail.")
+	}
+
+	if err := g.Wait(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Wait should return context.Canceled, got %v", err)
+	}
+	if count := counter.Load(); count != 2 {
+		t.Fatalf("Counter should be 2, got %d", count)
 	}
 }
 

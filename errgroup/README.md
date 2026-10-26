@@ -29,7 +29,6 @@ This helps elimate a class of bugs where subtasks accidentally use a parent cont
 - Automatically catches panics
 - Forces the correct context
 - Manages the context lifetime
-- Early-exits any calls to Go() or TryGo() once the group context is cancelled
 - Enforces that any `Limit` immutable and set at construction time.
 
 ### Using
