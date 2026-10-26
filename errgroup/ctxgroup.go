@@ -3,13 +3,15 @@ package errgroup
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
 
 type ctxGroup struct {
 	ctx    context.Context
 	cancel func(error)
 
-	wg sync.WaitGroup
+	wg     sync.WaitGroup
+	waited atomic.Bool
 
 	sem chan token
 
@@ -18,6 +20,12 @@ type ctxGroup struct {
 }
 
 var _ ContextGroup = (*ctxGroup)(nil)
+
+func (g *ctxGroup) checkNotWaited() {
+	if g.waited.Load() {
+		panic("errgroup: ContextGroup reused after Wait returned")
+	}
+}
 
 func (g *ctxGroup) done() {
 	if g.sem != nil {
@@ -38,12 +46,14 @@ func New(ctx context.Context) ContextGroup {
 // Wait blocks until all function calls from the Go method have returned, then returns the first non-nil error (if any) from them.
 func (g *ctxGroup) Wait() error {
 	g.wg.Wait()
+	g.waited.Store(true)
 	g.cancel(g.err)
 	return g.err
 }
 
 // Go calls the given function in a new goroutine.
 func (g *ctxGroup) Go(f func(context.Context) error) {
+	g.checkNotWaited()
 	if g.sem != nil {
 		g.sem <- token{}
 	}
@@ -66,6 +76,7 @@ func (g *ctxGroup) Go(f func(context.Context) error) {
 }
 
 func (g *ctxGroup) TryGo(f func(context.Context) error) bool {
+	g.checkNotWaited()
 	if g.sem != nil {
 		select {
 		case g.sem <- token{}:

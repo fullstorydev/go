@@ -39,7 +39,9 @@ type ErrGroup interface {
 // return early when appropriate.
 //
 // Unlike the golang version, ContextGroup cannot be reused after Wait() has
-// been called, because the context is dead.
+// returned, because the context is dead; Go() and TryGo() panic instead of
+// running a function nobody will wait for. Calling Go() from inside a running
+// function while Wait() is blocked is fine.
 type ContextGroup interface {
 	// Go calls the given function in a new goroutine, passing the group context.
 	//

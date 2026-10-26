@@ -85,40 +85,6 @@ func ExampleNew_parallel() {
 	// video result for "golang"
 }
 
-func TestZeroNew(t *testing.T) {
-	err1 := errors.New("errgroup_test: 1")
-	err2 := errors.New("errgroup_test: 2")
-
-	cases := []struct {
-		errs []error
-	}{
-		{errs: []error{}},
-		{errs: []error{nil}},
-		{errs: []error{err1}},
-		{errs: []error{err1, nil}},
-		{errs: []error{err1, nil, err2}},
-	}
-
-	for _, tc := range cases {
-		g := errgroup.New(context.Background())
-
-		var firstErr error
-		for i, err := range tc.errs {
-			g.Go(func(ctx context.Context) error { return err })
-
-			if firstErr == nil && err != nil {
-				firstErr = err
-			}
-
-			if gErr := g.Wait(); gErr != firstErr {
-				t.Errorf("after %T.Go(func() error { return err }) for err in %v\n"+
-					"g.Wait() = %v; want %v",
-					g, tc.errs[:i+1], err, firstErr)
-			}
-		}
-	}
-}
-
 func TestNew(t *testing.T) {
 	errDoom := errors.New("group_test: doomed")
 
@@ -169,15 +135,6 @@ func TestNewTryGo(t *testing.T) {
 		}
 	}()
 	_ = g.Wait()
-
-	// disabled: cannot reuse ContextGroup.
-	/*
-		if !g.TryGo(fn) {
-			t.Fatalf("TryGo should success but got fail after all goroutines.")
-		}
-		go func() { <-ch }()
-		g.Wait()
-	*/
 
 	// Switch limit.
 	g = errgroup.WithLimit(1).New(context.Background())
@@ -336,6 +293,54 @@ func TestNewGoRunsAlreadyCancelled(t *testing.T) {
 
 	if err := g.Wait(); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Wait should return context.Canceled, got %v", err)
+	}
+	if count := counter.Load(); count != 2 {
+		t.Fatalf("Counter should be 2, got %d", count)
+	}
+}
+
+func TestNewGoAfterWaitPanics(t *testing.T) {
+	expectPanic := func(t *testing.T, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Fatalf("expected panic")
+			}
+		}()
+		fn()
+	}
+	noop := func(ctx context.Context) error { return nil }
+
+	g := errgroup.WithLimit(1).New(context.Background())
+	g.Go(noop)
+	if err := g.Wait(); err != nil {
+		t.Fatalf("Wait should return nil, got %v", err)
+	}
+	if err := g.Wait(); err != nil {
+		t.Fatalf("second Wait should return nil, got %v", err)
+	}
+
+	t.Run("Go", func(t *testing.T) {
+		expectPanic(t, func() { g.Go(noop) })
+	})
+	t.Run("TryGo", func(t *testing.T) {
+		expectPanic(t, func() { g.TryGo(noop) })
+	})
+}
+
+func TestNewGoFromRunningFunc(t *testing.T) {
+	var counter atomic.Uint32
+	g := errgroup.New(context.Background())
+	g.Go(func(ctx context.Context) error {
+		counter.Add(1)
+		g.Go(func(ctx context.Context) error {
+			counter.Add(1)
+			return nil
+		})
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		t.Fatalf("Wait should return nil, got %v", err)
 	}
 	if count := counter.Load(); count != 2 {
 		t.Fatalf("Counter should be 2, got %d", count)
