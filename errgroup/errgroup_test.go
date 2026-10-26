@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the [LICENSE.google] file.
 //
-// Forked from v0.11.0 - https://go.googlesource.com/sync/+/refs/tags/v0.11.0/LICENSE
+// Forked from v0.24.0 - https://go.googlesource.com/sync/+/refs/tags/v0.24.0/errgroup/errgroup_test.go
 
 package errgroup_test
 
@@ -37,7 +37,7 @@ func fakeSearch(kind string) Search {
 
 // JustErrors illustrates the use of a Group in place of a sync.WaitGroup to
 // simplify goroutine counting and error handling. This example is derived from
-// the sync.WaitGroup example at https://golang.org/pkg/sync/#example_WaitGroup.
+// the sync.WaitGroup example at https://golang.org/pkg/sync/#example-WaitGroup.
 func ExampleGroup_justErrors() {
 	g := new(errgroup.Group)
 	var urls = []string{
@@ -61,9 +61,6 @@ func ExampleGroup_justErrors() {
 	if err := g.Wait(); err == nil {
 		fmt.Println("Successfully fetched all URLs.")
 	}
-
-	// Output:
-	// Successfully fetched all URLs.
 }
 
 // Parallel illustrates the use of a Group for synchronizing a simple parallel
@@ -228,7 +225,7 @@ func TestTryGo(t *testing.T) {
 	g.SetLimit(0)
 	for i := 0; i < 1<<10; i++ {
 		if g.TryGo(fn) {
-			t.Fatalf("TryGo should fail but got succeded.")
+			t.Fatalf("TryGo should fail but got succeeded.")
 		}
 	}
 	_ = g.Wait()
@@ -253,6 +250,45 @@ func TestGoLimit(t *testing.T) {
 	}
 	if err := g.Wait(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCancelCause(t *testing.T) {
+	errDoom := errors.New("group_test: doomed")
+
+	cases := []struct {
+		errs []error
+		want error
+	}{
+		{want: nil},
+		{errs: []error{nil}, want: nil},
+		{errs: []error{errDoom}, want: errDoom},
+		{errs: []error{errDoom, nil}, want: errDoom},
+	}
+
+	for _, tc := range cases {
+		g, ctx := errgroup.WithContext(context.Background())
+
+		for _, err := range tc.errs {
+			err := err
+			g.TryGo(func() error { return err })
+		}
+
+		if err := g.Wait(); err != tc.want {
+			t.Errorf("after %T.TryGo(func() error { return err }) for err in %v\n"+
+				"g.Wait() = %v; want %v",
+				g, tc.errs, err, tc.want)
+		}
+
+		if tc.want == nil {
+			tc.want = context.Canceled
+		}
+
+		if err := context.Cause(ctx); err != tc.want {
+			t.Errorf("after %T.TryGo(func() error { return err }) for err in %v\n"+
+				"context.Cause(ctx) = %v; tc.want %v",
+				g, tc.errs, err, tc.want)
+		}
 	}
 }
 
