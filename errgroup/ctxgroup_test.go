@@ -16,7 +16,7 @@ import (
 
 // JustErrors illustrates the use of a Group in place of a sync.WaitGroup to
 // simplify goroutine counting and error handling. This example is derived from
-// the sync.WaitGroup example at https://golang.org/pkg/sync/#example_WaitGroup.
+// the sync.WaitGroup example at https://golang.org/pkg/sync/#example-WaitGroup.
 func ExampleNew_justErrors() {
 	g := errgroup.New(context.Background())
 	var urls = []string{
@@ -44,9 +44,6 @@ func ExampleNew_justErrors() {
 	if err := g.Wait(); err == nil {
 		fmt.Println("Successfully fetched all URLs.")
 	}
-
-	// Output:
-	// Successfully fetched all URLs.
 }
 
 // Parallel illustrates the use of a Group for synchronizing a simple parallel
@@ -201,7 +198,7 @@ func TestNewTryGo(t *testing.T) {
 	g = errgroup.WithLimit(0).New(context.Background())
 	for i := 0; i < 1<<10; i++ {
 		if g.TryGo(fn) {
-			t.Fatalf("TryGo should fail but got succeded.")
+			t.Fatalf("TryGo should fail but got succeeded.")
 		}
 	}
 	_ = g.Wait()
@@ -225,6 +222,51 @@ func TestNewGoLimit(t *testing.T) {
 	}
 	if err := g.Wait(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNewCancelCause(t *testing.T) {
+	errDoom := errors.New("group_test: doomed")
+
+	cases := []struct {
+		errs []error
+		want error
+	}{
+		{want: nil},
+		{errs: []error{nil}, want: nil},
+		{errs: []error{errDoom}, want: errDoom},
+		{errs: []error{errDoom, nil}, want: errDoom},
+	}
+
+	for _, tc := range cases {
+		g := errgroup.New(context.Background())
+
+		// ContextGroup doesn't expose its context, so capture it from a func.
+		var gCtx context.Context
+		g.Go(func(ctx context.Context) error {
+			gCtx = ctx
+			return nil
+		})
+		for _, err := range tc.errs {
+			err := err
+			g.TryGo(func(ctx context.Context) error { return err })
+		}
+
+		if err := g.Wait(); err != tc.want {
+			t.Errorf("after %T.TryGo(func() error { return err }) for err in %v\n"+
+				"g.Wait() = %v; want %v",
+				g, tc.errs, err, tc.want)
+		}
+
+		if tc.want == nil {
+			tc.want = context.Canceled
+		}
+
+		if err := context.Cause(gCtx); err != tc.want {
+			t.Errorf("after %T.TryGo(func() error { return err }) for err in %v\n"+
+				"context.Cause(ctx) = %v; tc.want %v",
+				g, tc.errs, err, tc.want)
+		}
 	}
 }
 
