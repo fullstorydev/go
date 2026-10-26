@@ -1,6 +1,6 @@
 module github.com/fullstorydev/go/eventstream/test
 
-go 1.18
+go 1.24
 
 require (
 	github.com/fullstorydev/go/eventstream v0.0.0

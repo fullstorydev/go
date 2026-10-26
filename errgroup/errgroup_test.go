@@ -47,7 +47,6 @@ func ExampleGroup_justErrors() {
 	}
 	for _, url := range urls {
 		// Launch a goroutine to fetch the URL.
-		url := url // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func() error {
 			// Fetch the URL.
 			resp, err := http.Get(url)
@@ -74,7 +73,6 @@ func ExampleGroup_parallel() {
 		searches := []Search{Web, Image, Video}
 		results := make([]Result, len(searches))
 		for i, search := range searches {
-			i, search := i, search // https://golang.org/doc/faq#closures_and_goroutines
 			g.Go(func() error {
 				result, err := search(ctx, query)
 				if err == nil {
@@ -123,7 +121,6 @@ func TestZeroGroup(t *testing.T) {
 
 		var firstErr error
 		for i, err := range tc.errs {
-			err := err
 			g.Go(func() error { return err })
 
 			if firstErr == nil && err != nil {
@@ -156,7 +153,6 @@ func TestWithContext(t *testing.T) {
 		g, ctx := errgroup.WithContext(context.Background())
 
 		for _, err := range tc.errs {
-			err := err
 			g.Go(func() error { return err })
 		}
 
@@ -270,7 +266,6 @@ func TestCancelCause(t *testing.T) {
 		g, ctx := errgroup.WithContext(context.Background())
 
 		for _, err := range tc.errs {
-			err := err
 			g.TryGo(func() error { return err })
 		}
 

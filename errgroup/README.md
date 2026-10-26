@@ -43,7 +43,6 @@ func fetchUrls(ctx context.Context, urls []string) ([]string, error) {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	for i, url := range urls {
-		i, url := i, url
 		g.Go(func() error {
 			// remember to use the correct ctx here
 			body, err := httpGet(gCtx, url)
@@ -62,7 +61,6 @@ func fetchUrls(ctx context.Context, urls []string) ([]string, error) {
 	g := errgroup.New(ctx)
 
 	for i, url := range urls {
-		i, url := i, url
 		g.Go(func(ctx context.Context) error {
 			body, err := httpGet(ctx, url)
 			ret[i] = body
