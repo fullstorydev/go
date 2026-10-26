@@ -64,7 +64,6 @@ func main() {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	for i := 0; i < 3; i++ {
-		i := i
 		it := stream.Subscribe().Iterator()
 		wg.Add(1)
 		go func() {

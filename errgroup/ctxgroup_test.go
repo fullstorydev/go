@@ -26,7 +26,6 @@ func ExampleNew_justErrors() {
 	}
 	for _, url := range urls {
 		// Launch a goroutine to fetch the URL.
-		url := url // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func(ctx context.Context) error {
 			// Fetch the URL.
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -57,7 +56,6 @@ func ExampleNew_parallel() {
 		searches := []Search{Web, Image, Video}
 		results := make([]Result, len(searches))
 		for i, search := range searches {
-			i, search := i, search // https://golang.org/doc/faq#closures_and_goroutines
 			g.Go(func(ctx context.Context) error {
 				result, err := search(ctx, query)
 				if err == nil {
@@ -106,7 +104,6 @@ func TestZeroNew(t *testing.T) {
 
 		var firstErr error
 		for i, err := range tc.errs {
-			err := err
 			g.Go(func(ctx context.Context) error { return err })
 
 			if firstErr == nil && err != nil {
@@ -139,7 +136,6 @@ func TestNew(t *testing.T) {
 		g := errgroup.New(context.Background())
 
 		for _, err := range tc.errs {
-			err := err
 			g.Go(func(ctx context.Context) error { return err })
 		}
 
@@ -248,7 +244,6 @@ func TestNewCancelCause(t *testing.T) {
 			return nil
 		})
 		for _, err := range tc.errs {
-			err := err
 			g.TryGo(func(ctx context.Context) error { return err })
 		}
 
