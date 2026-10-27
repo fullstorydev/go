@@ -22,14 +22,18 @@ You can start using this today simply by changing your import statements.
 
 `ContextGroup` takes safety a step further: it is an alternative to [golang.org/x/sync/errgroup.WithContext()](https://pkg.go.dev/golang.org/x/sync/errgroup#WithContext).
 `ContextGroup` owns and manages the group context, and its updated API requires subtask functions to accept a `context.Context` argument to use the group context.
-This helps elimate a class of bugs where subtasks accidentally use a parent context rather than the correct group context.
+This helps eliminate a class of bugs where subtasks accidentally use a parent context rather than the correct group context.
 
 ### Features
 
 - Automatically catches panics
 - Forces the correct context
 - Manages the context lifetime
-- Enforces that any `Limit` immutable and set at construction time.
+- Enforces that any `Limit` is immutable and set at construction time
+- Panics if `Go()` or `TryGo()` is called after `Wait()` returns, rather than running a subtask nobody will wait for
+
+Like the original, every function passed to `Go()` runs, even if the group context is already cancelled,
+so subtasks should check their context and return early when appropriate.
 
 ### Using
 
